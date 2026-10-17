@@ -1,0 +1,30 @@
+{
+	"name": "@alumina/slicer",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"start": "vite start",
+		"typecheck": "tsc --noEmit",
+		"build:static": "vite build && node write-shell.mjs"
+	},
+	"dependencies": {
+		"@alumina/design": "workspace:*",
+		"@carbon/icons": "^11.89.0",
+		"@solidjs/router": "^1.0.0",
+		"@solidjs/start": "^2.0.5",
+		"@tauri-apps/api": "^2.12.3",
+		"@tauri-apps/plugin-http": "^2.8.3",
+		"solid-js": "^1.9.15",
+		"three": "^0.186.1"
+	},
+	"devDependencies": {
+		"@tailwindcss/vite": "^4.3.3",
+		"@types/three": "^0.186.0",
+		"tailwindcss": "^4.3.3",
+		"typescript": "^7.0.2",
+		"vite": "^8.3.1"
+	}
+}

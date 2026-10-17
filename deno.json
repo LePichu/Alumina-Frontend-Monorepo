@@ -1,0 +1,36 @@
+{
+	"//": "Deno is used here only as the lint + format binary. It is not the runtime; apps run on Node 24 under Vite.",
+	"fmt": {
+		"useTabs": true,
+		"lineWidth": 100,
+		"semiColons": false,
+		"singleQuote": false,
+		"proseWrap": "preserve",
+		"include": ["packages/", "scripts/", "deno.json", "package.json", "tsconfig.base.json"],
+		"exclude": [
+			"docs/",
+			"**/node_modules/",
+			"**/dist/",
+			"**/.output/",
+			"**/.solid/",
+			"**/fonts/",
+			"**/target/",
+			"**/src-tauri/gen/"
+		]
+	},
+	"lint": {
+		"include": ["packages/", "scripts/"],
+		"exclude": [
+			"docs/",
+			"**/node_modules/",
+			"**/dist/",
+			"**/.output/",
+			"**/.solid/",
+			"**/target/",
+			"**/src-tauri/gen/"
+		],
+		"rules": {
+			"tags": ["recommended"]
+		}
+	}
+}

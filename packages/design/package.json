@@ -1,0 +1,42 @@
+{
+	"name": "@alumina/design",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"sideEffects": [
+		"*.css",
+		"./src/internal/skeleton.ts"
+	],
+	"exports": {
+		".": {
+			"solid": "./src/index.ts",
+			"types": "./src/index.ts",
+			"default": "./src/index.ts"
+		},
+		"./theme.css": "./src/theme.css"
+	},
+	"scripts": {
+		"dev": "vite",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@carbon/icons": "^11.89.0",
+		"@shikijs/langs": "^4.4.3",
+		"@shikijs/themes": "^4.4.3",
+		"corvu": "^0.7.2",
+		"shiki": "^4.4.3",
+		"three": "^0.186.1"
+	},
+	"peerDependencies": {
+		"solid-js": "^1.9.15"
+	},
+	"devDependencies": {
+		"@tailwindcss/vite": "^4.3.3",
+		"@types/three": "^0.186.0",
+		"solid-js": "^1.9.15",
+		"tailwindcss": "^4.3.3",
+		"typescript": "^7.0.2",
+		"vite": "^8.3.1",
+		"vite-plugin-solid": "^2.11.14"
+	}
+}

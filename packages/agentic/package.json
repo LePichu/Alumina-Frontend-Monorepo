@@ -1,0 +1,25 @@
+{
+	"name": "@alumina/agentic",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"start": "vite start",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@alumina/design": "workspace:*",
+		"@carbon/icons": "^11.89.0",
+		"@solidjs/router": "^1.0.0",
+		"@solidjs/start": "^2.0.5",
+		"solid-js": "^1.9.15"
+	},
+	"devDependencies": {
+		"@tailwindcss/vite": "^4.3.3",
+		"tailwindcss": "^4.3.3",
+		"typescript": "^7.0.2",
+		"vite": "^8.3.1"
+	}
+}

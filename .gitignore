@@ -1,0 +1,18 @@
+node_modules/
+dist/
+.output/
+.solid/
+.vinxi/
+# Tauri: Rust's build output, and the schemas the CLI writes from the crate.
+target/
+packages/desktop/src-tauri/gen/
+*.tsbuildinfo
+*.local
+.DS_Store
+
+# Local environment and logs. Nothing in the repo reads an env file yet; when
+# something does, commit a .env.example beside it.
+.env
+.env.*
+!.env.example
+*.log

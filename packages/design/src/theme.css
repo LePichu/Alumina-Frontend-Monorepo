@@ -1,0 +1,768 @@
+/* @alumina/design — the one stylesheet.
+ *
+ * Everything that is not a Tailwind utility in a class attribute lives here:
+ * the tokens, the keyframes, a handful of utilities Tailwind cannot express,
+ * and the element defaults. Components have no CSS files of their own.
+ *
+ *   Fonts · Tokens · The backdrop's geometry · Motion · State utilities ·
+ *   The fill vocabulary · Backdrops · Base
+ *
+ * Values come from the prototypes' :root. All three agree on every token, so
+ * mica.html's tie-break never had to be used.
+ *
+ * Lengths are rem, never px. The px each one replaces is noted in a comment so
+ * the prototypes stay greppable. Root is 16px, so 0.25rem = 4px.
+ *
+ * Small spacings are named (--spacing-tight/-snug/-gap) rather than left as
+ * arbitrary values. That keeps numeric literals out of the class names
+ * entirely: `px-snug py-tight`, not `px-[0.375rem]`. Useful, because rem and
+ * the even-integer rule pull against each other — 6px is an even number of
+ * pixels but 0.375 is a fractional rem, and a name has neither problem.
+ *
+ * Six deliberate departures from the prototypes, all required by CLAUDE.md.
+ * None is silent: each is listed here and was reported when made.
+ *
+ *   1. The hue tokens are gone. --clay/--sand/--mint and --t-ok/--t-warn/--t-err
+ *      carried severity by colour; severity is now carried by icon, label and
+ *      weight, and the system is strictly monochrome.
+ *
+ *   2. One shadow, not two. The prototypes carry --shadow (4px) and --shadow-sm
+ *      (3px). 3px is odd, and its only even neighbours are 2px or 4px; 4px makes
+ *      it identical to --shadow. Since CLAUDE.md also says "One hard shadow. No
+ *      elevation layers", the sm variant is dropped rather than rounded into a
+ *      duplicate. Buttons that offset by 3px on :active now offset by 4px, so the
+ *      press still lands the face exactly where the shadow was.
+ *
+ *   3. The type scale is even, and a step larger than the prototypes. Theirs runs
+ *      8 / 9 / 9.5 / 10.5 / 11.5px, which rounds to 8 / 10 / 12. Those read too
+ *      small and too light in review — twice: the scale was lifted to 10 / 12 /
+ *      14px, cut back to 8 / 10 / 12 while the apps were being matched to the
+ *      prototypes pixel for pixel, and lifted again when the same complaint came
+ *      back. An audit at that point found 97% of mica's text at 10px or under
+ *      and dozens of labels at 2.6:1 contrast. So this one is settled: nothing
+ *      is smaller than 10px, and muted text is `opacity-muted` (--opacity-muted,
+ *      below) — one token, not a number repeated at every call site. 40% is for
+ *      *state* — disabled, switched off, not yet run — never for something that
+ *      is meant to be read. Do not "restore" the prototype sizes.
+ *
+ *   4. Severity separates by fill pattern. --background-image-hatch replaces the
+ *      red that Carbon's danger variants rely on, following the prototypes' own
+ *      note that things "separate by fill pattern, not hue".
+ *
+ *   5. Line heights are whole, even pixels. The prototypes set 1.45 on the body
+ *      and ratios like it elsewhere; on this type scale those give 20.3, 16.8,
+ *      45.36 and 35.2px lines, which put every text block — and so everything
+ *      below it on the page — on a fraction of a pixel. They are 20, 16, 46 and
+ *      36px now, written as rem lengths. Controls land on whole pixels as a
+ *      result: a text field is 34px tall, not 34.3.
+ *
+ *   6. Ink is black. The prototypes' --ink is #141417, a grey a step off black,
+ *      and it read as grey wherever it met true black — a dark dock, the desktop
+ *      around the app's own frameless window, the window's title bar beside the
+ *      system's. Asked for in review (2026-10-14): every near-black is black.
+ */
+
+/* ==========================================================================
+ * Fonts
+ *
+ * Self-hosted, so the apps work offline. Two weights and no italic: the system
+ * has regular and bold, and says everything else with size and case.
+ * ========================================================================== */
+
+@font-face {
+	font-family: "IBM Plex Mono";
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+	src: url("./fonts/ibm-plex-mono-400.woff2") format("woff2");
+}
+
+@font-face {
+	font-family: "IBM Plex Mono";
+	font-weight: 700;
+	font-style: normal;
+	font-display: swap;
+	src: url("./fonts/ibm-plex-mono-700.woff2") format("woff2");
+}
+
+/* ==========================================================================
+ * Tokens
+ *
+ * Everything under @theme generates utilities. Order: colour, opacity, type,
+ * space, shadow, pattern, motion.
+ * ========================================================================== */
+
+@theme {
+	/* Ink, and the greys the prototypes allow. No other hue exists.
+	   --color-gray is the prototypes' --gray: a press state, a pattern fill, a
+	   divider. --color-field is much lighter and does one job — it lights a form
+	   field while you are *in* it. It used to be the field's resting ground, which
+	   put a grey block behind every input on a page; that was reversed in review,
+	   and it now carries focus instead of the ink outline. 82% would be far too
+	   dark for either job: it reads as a filled-in box rather than as attention. */
+	/* Pure black, not the prototypes' #141417: see departure 6 above. */
+	--color-ink: #000;
+	--color-gray: hsl(0 0% 82%);
+	--color-field: hsl(0 0% 96%);
+
+	/* How far secondary text steps back: `opacity-muted`. A label beside its
+	   value, a helper line, a tile's meta — anything that is read, but second.
+	   80% of ink on white is 12.6:1 (9.6:1 while ink was #141417). It was 40%,
+	   then 60% (5.7:1 now; 4.8:1 then, the bare AA
+	   minimum), and at 60% a 10px line of Plex Mono was still the faintest thing
+	   on the page at 125% zoom. Carbon's own $text-secondary works out to about
+	   74% of this ink, on type that is both larger and heavier than ours, so 80%
+	   is that plus an allowance for a thin mono face at the floor size. The
+	   step back is already carried by size and weight almost everywhere it is
+	   used; the dim only has to be noticed, not relied on.
+	   Three things stay at a literal 60% on purpose and do not follow this token:
+	   placeholders (they must not read as a value), the second tone of a display
+	   headline, and a turn or form that has been dealt with. */
+	--opacity-muted: 0.8;
+
+	/* Mono everywhere. --font-sans is aliased so a stray `font-sans` can't
+	   silently introduce a proportional face. */
+	--font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+	--font-sans: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+	/* The prototypes set `font: 400 11.5px/1.45` on body and work down from there:
+	   9px tile headers, 9.5px buttons, 10–10.5px dense rows, 8px ruler numbers.
+	   This scale is that one, rounded to even and lifted by 2px at every step —
+	   see departure 3 at the top of the file for why it is not the prototypes'.
+	   --text-small is --text-label's size without the uppercase tracking, for dense
+	   list rows that are sentence case. */
+	/* Line heights land on the grid too. A ratio does not: the prototypes' 1.45
+	   on a 14px body is 20.3px a line, and 1.4 on 12px is 16.8 — so every block
+	   of text was a fraction of a pixel tall, and everything under it sat on a
+	   fraction. The four that came out fractional are lengths now, each the
+	   nearest even pixel; the rest were already whole and stay as ratios. See
+	   departure 5 at the top of the file. */
+	--text-micro: 0.625rem; /* 10px — the floor: meta, helper text, tooltips */
+	--text-micro--line-height: 1.2;
+	--text-micro--letter-spacing: 0.12em;
+	--text-label: 0.75rem; /* 12px — uppercase: buttons, switchers, accordion heads */
+	--text-label--line-height: 1;
+	--text-label--letter-spacing: 0.1em;
+	--text-small: 0.75rem; /* 12px — dense rows, sentence case */
+	--text-small--line-height: 1rem; /* 16px */
+	--text-body: 0.875rem; /* 14px — the body rule */
+	--text-body--line-height: 1.25rem; /* 20px */
+	/* Display sizes. Only the wordmark and headline figures use these.
+	   --text-hero and --text-headline are quarry's: it is the only app with
+	   marketing pages, so it is the only one that opens a screen with a sentence
+	   rather than a control. quarry.html sets its three at 42 / 34 / 30px; the
+	   lower two are one step apart on nothing, so they collapse into a single
+	   32px headline. Flagged, not silent. */
+	--text-hero: 2.625rem; /* 42px — a page's opening line */
+	--text-hero--line-height: 2.875rem; /* 46px */
+	--text-hero--letter-spacing: -0.045em;
+	--text-headline: 2rem; /* 32px — a section page's title */
+	--text-headline--line-height: 2.25rem; /* 36px */
+	--text-headline--letter-spacing: -0.04em;
+	--text-brand: 1.375rem; /* 22px */
+	--text-brand--line-height: 1;
+	--text-brand--letter-spacing: -0.03em;
+	--text-figure: 1rem; /* 16px — a total, set beside its label; a panel's title */
+	--text-figure--line-height: 1;
+
+	/* The micro step's tracking by itself, for the few lines that are tracked out
+	   at another size: a tile's meta, the playground's title. */
+	--tracking-micro: 0.12em;
+
+	/* Named so class names stay free of numeric literals. --spacing-gap is the
+	   prototypes' --gap, which was 0.6rem (9.6px). */
+	--spacing-rule: 0.125rem; /* 2px — one ink rule's thickness, and nothing finer */
+	--spacing-tight: 0.25rem; /* 4px */
+	--spacing-snug: 0.375rem; /* 6px */
+	--spacing-gap: 0.625rem; /* 10px */
+	--spacing-lane: 20rem;
+	--spacing-sky: 12rem;
+
+	/* Minimum hit area for any control, however small it looks. Named because
+	   44px is 2.75rem, which no even-integer class could express. */
+	--spacing-touch: 2.75rem; /* 44px */
+
+	/* Carbon's second icon size. 20px is five quarter-rems, so it has no even
+	   class; the other three are size-4, -6 and -8. */
+	--spacing-icon: 1.25rem; /* 20px */
+
+	/* A scrollbar: the gutter and the thumb in it are the same width, so the
+	   thumb is the only mark the bar makes and the gutter is exactly the room
+	   it needs. */
+	--spacing-scroll: 0.25rem; /* 4px */
+
+	/* The one hard shadow. Zero blur, no elevation layers. */
+	--shadow-hard: 0.25rem 0.25rem 0 var(--color-ink);
+
+	/* Severity, and anything else that must read as hazardous without hue.
+	   2px ink stripes on an 8px pitch — 25% coverage, so bold ink text stays
+	   legible over it. */
+	--background-image-hatch: repeating-linear-gradient(
+    45deg,
+    var(--color-ink) 0 0.125rem,
+    transparent 0.125rem 0.5rem
+  );
+
+	--ease-alumina: cubic-bezier(0.22, 0.9, 0.24, 1);
+
+	/* What a bare `transition-colors` or `transition-transform` gets: the
+	   system's hover speed and its one curve. Every control used to spell both
+	   out — `duration-[140ms] ease-alumina`, thirty times — and a control that
+	   forgot was the one that moved differently. A turn (a chevron, a caret) is
+	   slower and says so: `duration-220`. */
+	--default-transition-duration: 140ms;
+	--default-transition-timing-function: var(--ease-alumina);
+
+	--animate-outrun: outrun var(--speed) linear infinite;
+
+	/* kiln's chat tile opens with this. Fill mode is `backwards`, never `both`:
+	   a clip-path that survives the animation clips the element's own box-shadow,
+	   and every tile in this system has one. */
+	--animate-reveal: reveal 0.34s var(--ease-alumina) backwards;
+	--animate-blink: blink 0.9s steps(1) infinite;
+
+	/* An indeterminate bar: a block of ink that crosses its track and comes back
+	   in from the other side. Linear, because it is a clock, not a gesture. */
+	--animate-sweep: sweep 1.4s linear infinite;
+
+	/* A skeleton's breath: down to 40% and back. Every skeleton runs this one
+	   animation, and they are kept in step by starting them all from the same
+	   instant — see the `skeleton` utility. */
+	--animate-skeleton: skeleton 1.6s ease-in-out infinite;
+
+	/* Loading's ring: eight cells round a square, one inked at a time. Each cell
+	   runs this with its own delay. steps(1), so a cell is ink or it is not —
+	   a square system has no business easing a spinner round. */
+	--animate-cell: cell 0.8s steps(1) infinite;
+
+	/* A tab arriving in AppShell's strip: it pops — up from small, a touch past
+	   its size, and back. `backwards` so nothing of it lingers once it is done. */
+	--animate-tab-pop: tab-pop 0.26s var(--ease-alumina) backwards;
+}
+
+/* ==========================================================================
+ * The backdrop's geometry
+ *
+ * Plain custom properties, not tokens: they are ratios and one duration, read
+ * only by the floor-grid utility at the foot of this file.
+ * ========================================================================== */
+
+:root {
+	/* A bare HSL triplet consumed as hsl(var(--line) / <alpha>), not a colour,
+	   so it stays out of @theme and generates no utilities. */
+	--line: 225 6% 55%;
+
+	/* Floor geometry. Rows sit at floor-h · ((n + pos) / 7) ^ depth. --depth is
+	   the dial: 1 reads flat, below ~2.2 cells come out taller than wide.
+	   --apex MUST match the fan SVG, whose rays start 36 units above a 300-unit
+	   box. These are ratios and a duration, not lengths, so neither the rem rule
+	   nor the even-number rule reaches them. */
+	--floor-h: 40vh;
+	--speed: 1.6s;
+	--depth: 2.6;
+	--apex: 0.12;
+	--squareness: 1.15;
+	--hor: calc(100vh - var(--floor-h));
+	--near-gap: calc(1 - pow(6 / 7, var(--depth)));
+	--mid: calc(1 - var(--near-gap) / 2);
+	--cell: calc(
+    var(--floor-h) * var(--squareness) * var(--near-gap) * (1 + var(--apex)) /
+      (var(--mid) + var(--apex))
+  );
+}
+
+/* ==========================================================================
+ * Motion
+ *
+ * Registered properties and keyframes. The --animate-* tokens above name them;
+ * nothing else should.
+ * ========================================================================== */
+
+/* Drives the floor's scroll. A registered custom property so it can be
+   interpolated; a plain --var would jump rather than animate. */
+@property --outrun {
+	syntax: "<number>";
+	initial-value: 0;
+	inherits: false;
+}
+
+@keyframes outrun {
+	to {
+		--outrun: 1;
+	}
+}
+
+/* Opens from a horizontal band rather than fading or sliding. */
+@keyframes reveal {
+	from {
+		clip-path: inset(42% 0 42% 0);
+		opacity: 0.4;
+	}
+	to {
+		clip-path: inset(0 0 0 0);
+		opacity: 1;
+	}
+}
+
+/* A tab arriving: from small and clear, past full size, then settling. Scale
+   only, so it is the compositor's to run and nothing beside it moves. */
+@keyframes tab-pop {
+	0% {
+		transform: scale(0.4);
+		opacity: 0;
+	}
+	60% {
+		transform: scale(1.12);
+		opacity: 1;
+	}
+	100% {
+		transform: scale(1);
+	}
+}
+
+/* The streaming caret. */
+@keyframes blink {
+	50% {
+		opacity: 0;
+	}
+}
+
+/* A band crossing a block: the progress bar's
+   indeterminate state. Positions are percentages of the *free* space, so a band
+   a quarter of the track wide starts fully off one edge at -33.34% and is fully
+   off the other at 133.34%. */
+@keyframes sweep {
+	from {
+		background-position: -33.34% 0;
+	}
+	to {
+		background-position: 133.34% 0;
+	}
+}
+
+/* One cell's turn: ink for an eighth of the cycle, grey for the rest. */
+@keyframes cell {
+	0% {
+		fill: var(--color-ink);
+	}
+	12.5%,
+	100% {
+		fill: var(--color-gray);
+	}
+}
+
+/* ==========================================================================
+ * State utilities
+ *
+ * Things a component says about itself that Tailwind has no word for.
+ * ========================================================================== */
+
+/* Put this on anything with an ink ground. It changes nothing you can see at
+ * rest: it tells the two things that are drawn in ink *over* a ground — the
+ * focus outline and a text selection — to be white instead, so both still show.
+ *
+ * It reaches what is inside it in the DOM and stops there, which is what is
+ * wanted: a white menu opened from an ink bar is portalled out, and is not
+ * "on ink".
+ *
+ * The selection is flipped with a plain descendant rule rather than a custom
+ * property read inside `::selection`. How a highlight pseudo-element sees an
+ * element's custom properties has differed between engines and between
+ * versions of the same one; a selector has not. `fill` is there for the same
+ * reason it is in the base rule. */
+@utility on-ink {
+	--focus-ink: #fff;
+
+	&::selection,
+	& ::selection {
+		background-color: #fff;
+		color: var(--color-ink);
+		fill: var(--color-ink);
+	}
+}
+
+/* A block whose ground runs to the window's edge — quarry's ink footer — runs
+ * on under the page's scrollbar as well.
+ *
+ * The page is inset by the scrollbar's gutter (see the base layer), so anything
+ * laid out in it stops that far short of the window. For content that is the
+ * point. For a ground it is a strip of backdrop down the side of an ink block.
+ * This takes the ground out across the gutter and pads the same amount back, so
+ * what is inside the block stays in line with the page above it.
+ *
+ * Where the page has no gutter — under a finger, or with no `PageScrollbar` —
+ * the variable is unset and this does nothing. */
+@utility page-bleed {
+	margin-inline-end: calc(var(--page-gutter, 0rem) * -1);
+	padding-inline-end: var(--page-gutter, 0rem);
+}
+
+/* Something is coming and this is its shape: a grey block that breathes.
+ *
+ * Every skeleton on the page fades together. Skeletons arrive at different
+ * moments, and an animation starts when its element does, so left alone a
+ * loading page flickers like a faulty sign. They are put in step by giving
+ * every one of these animations the same start time — the page's own zero —
+ * which `internal/skeleton.ts` does as each begins. It is one opacity
+ * animation per block, which the compositor runs; nothing is restyled while
+ * they breathe.
+ *
+ * This is the third way it has been done. The first was a white band sweeping
+ * across each block, which read as every block being cut in two. The second
+ * kept one stepped clock on the root flipping an inherited number, with each
+ * skeleton *transitioning* its opacity to it: in step by construction, and it
+ * worked in Chromium and WebKit — but a transition is not supposed to start
+ * from a change an animation made, and Firefox, correctly, did not start one,
+ * so there the blocks blinked. (Animating the inherited number smoothly
+ * instead restyles the whole document sixty times a second.)
+ *
+ * Still under prefers-reduced-motion, where the block simply sits.
+ * --color-gray is doing what the prototypes use it for: a fill that is not ink
+ * and not ground. */
+@keyframes skeleton {
+	50% {
+		opacity: 0.4;
+	}
+}
+
+@utility skeleton {
+	background-color: var(--color-gray);
+	animation: var(--animate-skeleton);
+
+	@media (prefers-reduced-motion: reduce) {
+		animation: none;
+	}
+}
+
+/* A band of ink crossing its track and coming back in from the other side: a
+ * progress bar that does not know how far along it is. Reduced motion parks it as a full-width hatch — still visibly "busy", and
+ * not a claim of 100%. */
+@utility bar-sweep {
+	background: linear-gradient(var(--color-ink), var(--color-ink)) no-repeat;
+	background-size: 25% 100%;
+	animation: var(--animate-sweep);
+
+	@media (prefers-reduced-motion: reduce) {
+		animation: none;
+		background: var(--background-image-hatch);
+	}
+}
+
+/* ==========================================================================
+ * The fill vocabulary
+ *
+ * Identity by pattern, never by hue. `bg-hatch` (a token, above) marks hazard;
+ * these say *which one*. Swatch names them, and each has an SVG twin in
+ * charts/fills.tsx.
+ * ========================================================================== */
+
+/* mica's tool-plate fills. Identity by pattern, never by hue: six modules need
+ * six distinguishable swatches, and two of them sharing a pattern would defeat
+ * the reason these exist. Utilities rather than --background-image-* tokens
+ * because dots needs a background-size, and that namespace also generates bg-*,
+ * so a token pair would collide on one name.
+ *
+ * Distinct from bg-hatch, which marks hazard. Same visual family, different job:
+ * one says which tool, the other says how bad.
+ *
+ * Pitches are the prototype's, rounded to even lengths — its 5px cell becomes
+ * 0.375rem (6px), its 4px stays 0.25rem. */
+@utility pat-dots {
+	background-image: radial-gradient(var(--color-ink) 0.0625rem, #fff 0.0625rem);
+	background-size: 0.375rem 0.375rem;
+}
+
+@utility pat-cross {
+	background-image: repeating-linear-gradient(
+		-45deg,
+		var(--color-ink) 0 0.0625rem,
+		transparent 0.0625rem 0.25rem
+	), repeating-linear-gradient(45deg, var(--color-ink) 0 0.0625rem, #fff 0.0625rem 0.25rem);
+}
+
+/* The rest of the fill vocabulary. mica's six tool modules needed six swatches;
+ * a chart can need a dozen series, and every one has to stay distinguishable in
+ * ink alone. Each of these has an SVG twin in charts/fills.tsx — keep the two in
+ * step, since a legend swatch is drawn with the utility and the mark it stands
+ * for is drawn with the pattern. */
+@utility pat-back {
+	background-image: repeating-linear-gradient(
+		-45deg,
+		var(--color-ink) 0 0.125rem,
+		#fff 0.125rem 0.5rem
+	);
+}
+
+@utility pat-lines {
+	background-image: repeating-linear-gradient(
+		0deg,
+		var(--color-ink) 0 0.125rem,
+		#fff 0.125rem 0.375rem
+	);
+}
+
+@utility pat-bars {
+	background-image: repeating-linear-gradient(
+		90deg,
+		var(--color-ink) 0 0.125rem,
+		#fff 0.125rem 0.375rem
+	);
+}
+
+@utility pat-grid {
+	background-image: repeating-linear-gradient(
+		0deg,
+		var(--color-ink) 0 0.0625rem,
+		transparent 0.0625rem 0.375rem
+	), repeating-linear-gradient(90deg, var(--color-ink) 0 0.0625rem, #fff 0.0625rem 0.375rem);
+}
+
+@utility pat-checker {
+	background-image: repeating-conic-gradient(var(--color-ink) 0 25%, #fff 0 50%);
+	background-size: 0.5rem 0.5rem;
+}
+
+/* Two grey rules through the centre of a box — the ground of mica's rotate pad.
+ * A utility rather than an inline style: the commas and slashes in a multi-layer
+ * background do not survive as a Tailwind arbitrary value, and it is static. */
+@utility crosshair {
+	background: linear-gradient(var(--color-gray), var(--color-gray)) 50% 0 / 0.125rem 100%
+		no-repeat, linear-gradient(var(--color-gray), var(--color-gray)) 0 50% / 100% 0.125rem
+		no-repeat;
+}
+
+/* ==========================================================================
+ * Backdrops
+ *
+ * mica's two, drawn by the Background component.
+ * ========================================================================== */
+
+/* The synthwave floor, 1:1 with mica.html's `.floor`.
+ *
+ * One element carrying one background stack, exactly as the prototype does it:
+ *
+ *   background: var(--lgh), var(--lg0) … var(--lg7), <fan>
+ *
+ * CSS paints the first layer on top, so that reads: horizon rule, then rows 0-7,
+ * then the fan underneath everything. Composing it as one stack rather than as
+ * separate stacked elements is what makes the layer order automatic and keeps the
+ * fan rasterising the way the prototype's does.
+ *
+ * Rows sit at --hor + floor-h * ((n + pos) / 7) ^ depth, so as --outrun runs 0 -> 1
+ * each row slides into the position its neighbour just left and the loop is
+ * seamless. --hor is 100vh - floor-h, which is exact here because the element is
+ * `fixed inset-0` and therefore always viewport-height.
+ *
+ * Each --lN is wrapped in calc() where it is defined and read as a plain var().
+ * The prototype stores the bare expression and wraps it at each use site as
+ * calc(var(--lN)); the values are identical, and this form does not depend on
+ * token substitution surviving every minifier the stylesheet meets.
+ *
+ * The alpha and thickness ramps (0.4 -> 0.98, 1px -> 2.1px) are the perspective
+ * cue: nearer rules are thicker and darker. Computed optical geometry rather than
+ * design spacing, the same category as --depth and --apex, so they keep their odd
+ * and fractional values. Flagged, not silent.
+ *
+ * --fan is supplied by the Background component as a generated data URI. */
+@utility floor-grid {
+	--pos: var(--outrun, 0);
+	--l0: calc(var(--hor) + var(--floor-h) * pow((0 + var(--pos)) / 7, var(--depth)));
+	--l1: calc(var(--hor) + var(--floor-h) * pow((1 + var(--pos)) / 7, var(--depth)));
+	--l2: calc(var(--hor) + var(--floor-h) * pow((2 + var(--pos)) / 7, var(--depth)));
+	--l3: calc(var(--hor) + var(--floor-h) * pow((3 + var(--pos)) / 7, var(--depth)));
+	--l4: calc(var(--hor) + var(--floor-h) * pow((4 + var(--pos)) / 7, var(--depth)));
+	--l5: calc(var(--hor) + var(--floor-h) * pow((5 + var(--pos)) / 7, var(--depth)));
+	--l6: calc(var(--hor) + var(--floor-h) * pow((6 + var(--pos)) / 7, var(--depth)));
+	--l7: calc(var(--hor) + var(--floor-h) * pow((7 + var(--pos)) / 7, var(--depth)));
+
+	--lgh: linear-gradient(
+		transparent 0 var(--hor),
+		hsl(var(--line) / 0.9) var(--hor) calc(var(--hor) + 1px),
+		transparent calc(var(--hor) + 1px)
+	);
+
+	--lg0: linear-gradient(
+		transparent 0 var(--l0),
+		hsl(var(--line) / 0.4) var(--l0) calc(var(--l0) + 1px),
+		transparent calc(var(--l0) + 1px)
+	);
+	--lg1: linear-gradient(
+		transparent 0 var(--l1),
+		hsl(var(--line) / 0.483) var(--l1) calc(var(--l1) + 1.16px),
+		transparent calc(var(--l1) + 1.16px)
+	);
+	--lg2: linear-gradient(
+		transparent 0 var(--l2),
+		hsl(var(--line) / 0.566) var(--l2) calc(var(--l2) + 1.31px),
+		transparent calc(var(--l2) + 1.31px)
+	);
+	--lg3: linear-gradient(
+		transparent 0 var(--l3),
+		hsl(var(--line) / 0.649) var(--l3) calc(var(--l3) + 1.47px),
+		transparent calc(var(--l3) + 1.47px)
+	);
+	--lg4: linear-gradient(
+		transparent 0 var(--l4),
+		hsl(var(--line) / 0.731) var(--l4) calc(var(--l4) + 1.63px),
+		transparent calc(var(--l4) + 1.63px)
+	);
+	--lg5: linear-gradient(
+		transparent 0 var(--l5),
+		hsl(var(--line) / 0.814) var(--l5) calc(var(--l5) + 1.79px),
+		transparent calc(var(--l5) + 1.79px)
+	);
+	--lg6: linear-gradient(
+		transparent 0 var(--l6),
+		hsl(var(--line) / 0.897) var(--l6) calc(var(--l6) + 1.94px),
+		transparent calc(var(--l6) + 1.94px)
+	);
+	--lg7: linear-gradient(
+		transparent 0 var(--l7),
+		hsl(var(--line) / 0.98) var(--l7) calc(var(--l7) + 2.1px),
+		transparent calc(var(--l7) + 2.1px)
+	);
+
+	background: var(--lgh), var(--lg0), var(--lg1), var(--lg2), var(--lg3), var(--lg4),
+		var(--lg5), var(--lg6), var(--lg7),
+		var(--fan) center bottom / calc(48 * var(--cell)) var(--floor-h) no-repeat;
+}
+
+/* Blueprint sheet — mica's second backdrop, and a still one. Two square grids,
+ * fine and coarse, under a grey vignette that closes in radially instead of
+ * falling from the top. The vignette is the top layer, so it swallows the grid at
+ * the rim on its own.
+ *
+ * The values are the prototype's. Its five vignette greys (79-85% lightness) are
+ * not --gray; they are its own, kept rather than re-derived. The 1px hairlines
+ * keep their odd value for the same reason the floor's ramp does.
+ *
+ * The mechanism is not. The prototype drew each grid as a repeating gradient
+ * across the whole sheet, which asks the engine to place every hairline from
+ * one long ramp; at a fractional device pixel ratio (150% zoom is 1.5) WebKit
+ * rounds each stop on its own and the lines smear into a uniform grey wash.
+ * One cell drawn once and tiled puts every line on the same pixels as the
+ * first, in every engine. */
+@utility blueprint-sheet {
+	background:
+		radial-gradient(
+		98% 93% at 50% 50%,
+		hsl(0 0% 85% / 0) 10%,
+		hsl(0 0% 84% / 0.5) 37%,
+		hsl(0 0% 83% / 0.88) 58%,
+		hsl(0 0% 81%) 82%,
+		hsl(0 0% 79%) 100%
+	),
+		linear-gradient(90deg, hsl(var(--line) / 0.32) 1px, transparent 1px) 0 100% / 26px 26px,
+		linear-gradient(0deg, hsl(var(--line) / 0.32) 1px, transparent 1px) 0 100% / 26px 26px,
+		linear-gradient(90deg, hsl(var(--line) / 0.58) 2px, transparent 2px) 0 100% / 130px 130px,
+		linear-gradient(0deg, hsl(var(--line) / 0.58) 2px, transparent 2px) 0 100% / 130px 130px;
+}
+
+/* ==========================================================================
+ * Base
+ *
+ * Element defaults: scrollbars, selection, the page, and keyboard focus.
+ * ========================================================================== */
+
+@layer base {
+	/* The browser draws no scrollbars. `internal/scroll.tsx` does.
+	 *
+	 * The system's scrollbar is a 4px ink thumb in a gutter exactly as wide,
+	 * and no engine can be styled into that everywhere: Chromium and WebKit
+	 * paint the *page's* gutter opaque whatever its track is told, which ran a
+	 * white strip down the window's edge and cut the backdrop off; Firefox
+	 * takes a colour and a width keyword and draws a rounded pill. So every
+	 * native bar is switched off here, in both the standard and the WebKit
+	 * spelling, and whatever scrolls is given a drawn one: `Scroller` inside
+	 * the design system, `ScrollArea` in an app, `PageScrollbar` for the page.
+	 *
+	 * Scrolling is untouched — wheel, keys, touch and momentum are still the
+	 * browser's. Only the bar is ours.
+	 *
+	 * It has been through three designs. The prototypes' own (a white track,
+	 * a 2px ink rule down it, a heavy thumb) was the loudest thing on a screen
+	 * of panes. A slimmer styled native bar was quieter and still had the
+	 * opaque page gutter. Don't bring a track or a rule back. */
+	* {
+		scrollbar-width: none;
+	}
+
+	*::-webkit-scrollbar {
+		display: none;
+	}
+
+	/* The page keeps a gutter for its own scrollbar wherever it has one, so
+	   nothing in the page runs under the thumb — while what is fixed behind the
+	   page, the backdrop above all, runs on to the window's edge. Reserved
+	   whether or not the page overflows, and from the first paint, so nothing
+	   shifts sideways when content arrives. Not under a finger: no bar, no
+	   gutter. */
+	@media not (pointer: coarse) {
+		body:has([data-page-scrollbar]) {
+			/* Named, so a block that has to run under the gutter can undo it:
+			   see `page-bleed`. */
+			--page-gutter: var(--spacing-scroll);
+			padding-inline-end: var(--page-gutter);
+		}
+	}
+
+	/* Selected text inverts: ink ground, white text. The browser's own highlight
+	   is the platform's accent colour — blue, usually — and it was the one hue on
+	   the page that nobody had chosen. Inversion is already how the system says
+	   "selected" everywhere else: a chosen tab, a chosen row, a chosen tile.
+	   On an ink ground the pair swaps; see `on-ink`.
+
+	   `fill` as well as `color`, and it is not optional. SVG text is painted with
+	   its fill, and Chromium keeps that fill under a selection unless told
+	   otherwise — so every chart label and figure caption, being ink, selected as
+	   ink on ink: a row of solid black bars. Firefox paints selected SVG text in
+	   `color` and never showed it. */
+	::selection {
+		background-color: var(--color-ink);
+		color: #fff;
+		fill: #fff;
+	}
+
+	/* WebKit treats a selected <svg> as it does a selected image and washes the
+	   whole box in the highlight colour — which, the highlight being ink, turned
+	   a chart into a dark slab the moment a selection ran across it. The box
+	   takes no highlight; the text inside it still does, from the rule above. */
+	svg::selection {
+		background-color: transparent;
+	}
+
+	/* The same accent colour leaks in two more places: any native control the
+	   browser draws for itself, and the flash it puts on whatever a finger taps.
+	   Controls here have their own pressed state. */
+	:root {
+		accent-color: var(--color-ink);
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	html,
+	body {
+		height: 100%;
+	}
+
+	body {
+		margin: 0;
+		background: #fff;
+		color: var(--color-ink);
+		font-family: var(--font-mono);
+		font-size: var(--text-body);
+		line-height: var(--text-body--line-height);
+		-webkit-font-smoothing: antialiased;
+	}
+
+	/* Keyboard focus is always visible. For most controls that is an ink outline;
+	   form fields opt out of it here and light their ground instead, because CSS
+	   matches :focus-visible on a text input for *every* focus, mouse included, so
+	   the ring appeared on every click into a field. See FIELD_BASE.
+	   The outline's ink is a variable so that an ink ground can turn it white —
+	   see the `on-ink` utility. Without that it is ink on ink, which is to say
+	   absent, and "always visible" was false on every header bar in the system. */
+	:focus-visible {
+		outline: 0.125rem solid var(--focus-ink, var(--color-ink));
+		outline-offset: 0.125rem;
+	}
+}

@@ -1,0 +1,7 @@
+# One line ending in the repository, whatever the checkout's platform.
+* text=auto eol=lf
+
+# The prototypes are single files with images and meshes inlined; a diff of one
+# is megabytes of base64 and says nothing.
+docs/prototypes/*.html -diff linguist-vendored
+pnpm-lock.yaml -diff linguist-generated

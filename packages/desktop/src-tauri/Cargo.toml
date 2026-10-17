@@ -1,0 +1,23 @@
+# The desktop app: a window, and the slicer's page inside it. Nothing of the
+# app itself is written in Rust yet — the window is the whole of this crate,
+# with two commands — the desktop's own file picker, and reading the files picked
+# or dropped on it — and an HTTP client for reaching mica.
+[package]
+name = "alumina-desktop"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+tauri = { version = "2.12", features = [] }
+# The page's way to mica in a build: mica sends no CORS headers, and a request
+# made by the window rather than the page needs none. Plain HTTP to loopback
+# only, so no TLS and no system proxy.
+tauri-plugin-http = { version = "2.8", default-features = false }
+# The file picker: the desktop's own, through the XDG desktop portal — GTK4 on
+# GNOME, Qt on KDE — rather than the GTK3 chooser a file input opens in
+# WebKitGTK, or the plugin's own GTK3 default.
+tauri-plugin-dialog = { version = "2.8", default-features = false, features = ["xdg-portal"] }

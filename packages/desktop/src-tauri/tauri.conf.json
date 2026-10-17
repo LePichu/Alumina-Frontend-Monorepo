@@ -1,0 +1,42 @@
+{
+	"$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+	"productName": "Foundry",
+	"version": "0.1.0",
+	"identifier": "org.alumina.foundry",
+	"build": {
+		"devUrl": "http://localhost:4300",
+		"beforeDevCommand": "pwsh -NoProfile -File ../../scripts/Start-DevServer.ps1 -Package slicer -Port 4300",
+		"frontendDist": "../../slicer/dist/client",
+		"beforeBuildCommand": "pnpm --filter @alumina/slicer build:static"
+	},
+	"app": {
+		"enableGTKAppId": true,
+		"windows": [
+			{
+				"label": "main",
+				"title": "Foundry",
+				"width": 1440,
+				"height": 900,
+				"minWidth": 960,
+				"minHeight": 600,
+				"center": true,
+				"decorations": false,
+				"dragDropEnabled": true
+			}
+		],
+		"security": {
+			"csp": null
+		}
+	},
+	"bundle": {
+		"active": true,
+		"targets": "all",
+		"icon": [
+			"icons/128x128@2x.png",
+			"icons/32x32.png",
+			"icons/128x128.png",
+			"icons/icon.icns",
+			"icons/icon.ico"
+		]
+	}
+}

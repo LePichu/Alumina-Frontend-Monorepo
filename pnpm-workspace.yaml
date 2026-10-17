@@ -1,0 +1,8 @@
+packages:
+  - "packages/*"
+
+# pnpm 10 blocks postinstall scripts unless a package is listed here.
+# Both of these need theirs to fetch their native binary.
+onlyBuiltDependencies:
+  - "@tailwindcss/oxide"
+  - esbuild

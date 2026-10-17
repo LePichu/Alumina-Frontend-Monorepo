@@ -1,0 +1,28 @@
+{
+	"$schema": "../gen/schemas/desktop-schema.json",
+	"identifier": "default",
+	"description": "What the slicer's page may ask of its own window: move it, the three buttons a title bar has, its title, and zoom; and reach mica, on loopback only.",
+	"windows": [
+		"main"
+	],
+	"permissions": [
+		"core:default",
+		"core:window:allow-minimize",
+		"core:window:allow-toggle-maximize",
+		"core:window:allow-close",
+		"core:window:allow-start-dragging",
+		"core:window:allow-set-title",
+		"core:webview:allow-set-webview-zoom",
+		{
+			"identifier": "http:default",
+			"allow": [
+				{
+					"url": "http://127.0.0.1:*"
+				},
+				{
+					"url": "http://localhost:*"
+				}
+			]
+		}
+	]
+}

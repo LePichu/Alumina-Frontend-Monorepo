@@ -1,0 +1,19 @@
+{
+	"name": "alumina-frontend-monorepo",
+	"private": true,
+	"type": "module",
+	"packageManager": "pnpm@10.20.0",
+	"engines": {
+		"node": ">=24"
+	},
+	"scripts": {
+		"dev": "pnpm -r --parallel --filter '!@alumina/desktop' dev",
+		"dev:apps": "pnpm --parallel --filter @alumina/slicer --filter @alumina/hub --filter @alumina/agentic dev",
+		"dev:desktop": "pnpm --filter @alumina/desktop dev",
+		"typecheck": "pnpm -r typecheck",
+		"build": "pnpm -r build",
+		"fmt": "deno fmt",
+		"fmt:check": "deno fmt --check",
+		"lint": "deno lint"
+	}
+}
