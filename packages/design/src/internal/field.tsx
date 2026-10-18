@@ -144,6 +144,22 @@ export const FIELD_TOOL = [
 	"pointer-coarse:min-w-touch",
 ].join(" ")
 
+/** The same control inside a fluid cell: a 40px square in the cell's top
+ *  corner, the height of the label, its gap and the value together, so it
+ *  stands centred beside them however tall a message makes the cell. In the
+ *  value's row it was 32px wide and only as tall as the line of text — under
+ *  the pointer a flat grey bar, low in the cell. The input keeps clear of it
+ *  (`FIELD_INNER_FLUID_TOOL`). 48px under a finger. */
+export const FIELD_TOOL_FLUID = [
+	"absolute right-2 top-2 flex size-10 cursor-pointer items-center justify-center border-0",
+	"bg-transparent text-ink hover:bg-gray focus-visible:-outline-offset-2",
+	"disabled:cursor-not-allowed pointer-coarse:size-12",
+].join(" ")
+
+/** The room an input in a fluid cell leaves for a `FIELD_TOOL_FLUID`: the
+ *  square's 40px and 8px clear of it. */
+export const FIELD_INNER_FLUID_TOOL = "p-0 pr-12"
+
 /** Severity thickens the rule. Weight, never hue. */
 export const FIELD_FLAGGED = "border-b-4"
 
@@ -383,16 +399,20 @@ export function Field(props: FieldProps) {
 			{(mode) => (
 				// The cell is the field: a white box that lights when anything in it is
 				// focused. Tiled, the form's grid rules it off from its neighbours and
-				// it has no border of its own; alone, it is boxed.
+				// it has no border of its own; alone, it is boxed. Padded 8px all round,
+				// with 8px between the label and the value. At 6px above, 4px below and
+				// nothing under the label, the value sat on the label's foot; at 16px
+				// at the sides, the label read as pushed in (the sign-in card, in
+				// review). Even on every side, the box is a frame round the two lines.
 				<div
-					class={`relative flex min-w-0 flex-col bg-white px-2 pb-tight pt-snug focus-within:bg-field
+					class={`relative flex min-w-0 flex-col bg-white p-2 focus-within:bg-field
 						${mode().tiled ? "" : "border-2 border-ink"} ${props.class ?? ""}`}
 				>
 					<FieldLabel
 						for={props.id}
 						hideLabel={props.hideLabel}
 						counter={props.counter}
-						class="mb-0"
+						class="mb-2"
 					>
 						{props.labelText}
 					</FieldLabel>

@@ -6,6 +6,7 @@ import {
 	createSignal,
 	createUniqueId,
 	For,
+	onCleanup,
 	onMount,
 	Show,
 	Suspense,
@@ -20,6 +21,7 @@ import Home from "@carbon/icons/es/home/16"
 import Maximize from "@carbon/icons/es/maximize/16"
 import Minimize from "@carbon/icons/es/minimize/16"
 import Subtract from "@carbon/icons/es/subtract/16"
+import { Menu, MenuItem, MenuItemDivider } from "../../carbon/Menu/Menu"
 import { Tooltip } from "../../carbon/Tooltip/Tooltip"
 import type { TooltipAlign } from "../../carbon/Tooltip/Tooltip"
 import { Content } from "../../carbon/UIShell/Content"
@@ -97,6 +99,17 @@ export type AppShellController = {
 	/** Closes a page. Home cannot be closed. Closing the page that is showing
 	 *  goes back to the one shown before it. */
 	close: (id: string) => void
+	/** Closes every page but Home and this one. */
+	closeOthers: (id: string) => void
+	/** Closes the pages after this one in the strip. */
+	closeBelow: (id: string) => void
+	/** Closes every page but Home. */
+	closeAll: () => void
+	/** Opens the page closed last, again — built anew, as it was opened: a page
+	 *  is an instance, and the one that was closed is gone. */
+	reopen: () => void
+	/** Whether there is a closed page to open again. */
+	canReopen: () => boolean
 	/** Goes to a page that is open. */
 	select: (id: string) => void
 	/** Back and forward through the pages that have been shown, as a browser
@@ -132,6 +145,10 @@ export function createAppShell(
 	const active = () => trail()[at()] ?? HOME
 	const isOpen = (id: string) => pages().some((page) => page.id === id)
 
+	// What was closed, the last last — as a browser keeps its closed tabs, for
+	// opening them again. Kept to a browser's length.
+	const [closed, setClosed] = createSignal<AppShellPage[]>([])
+
 	const go = (id: string) => {
 		if (id === active()) return
 		batch(() => {
@@ -141,30 +158,57 @@ export function createAppShell(
 		})
 	}
 
+	const open = (page: AppShellPage) =>
+		batch(() => {
+			if (!isOpen(page.id)) setPages([...pages(), page])
+			go(page.id)
+		})
+
+	const close = (id: string) => {
+		const page = pages().find((entry) => entry.id === id)
+		if (id === HOME || !page) return
+		batch(() => {
+			// It is taken out of the trail as well, so back never lands on a
+			// page that is gone. What is left of the trail up to here ends on
+			// the page shown before it — which is where closing it goes.
+			const behind = settle(trail().slice(0, at() + 1).filter((step) => step !== id))
+			const ahead = trail().slice(at() + 1).filter((step) => step !== id)
+			setTrail(settle([...behind, ...ahead]))
+			setAt(behind.length - 1)
+			setPages(pages().filter((entry) => entry.id !== id))
+			setClosed([...closed().filter((entry) => entry.id !== id), page].slice(-25))
+		})
+	}
+
+	/** Closes these, one after another, the strip's last first — so what is
+	 *  left showing is what closing them one by one would leave. */
+	const closeEach = (ids: string[]) => {
+		for (const id of [...ids].reverse()) close(id)
+	}
+
 	return {
 		pages,
 		active,
-		open: (page) =>
-			batch(() => {
-				if (!isOpen(page.id)) setPages([...pages(), page])
-				go(page.id)
-			}),
+		open,
 		select: (id) => {
 			if (isOpen(id)) go(id)
 		},
-		close: (id) => {
-			if (id === HOME || !isOpen(id)) return
-			batch(() => {
-				// It is taken out of the trail as well, so back never lands on a
-				// page that is gone. What is left of the trail up to here ends on
-				// the page shown before it — which is where closing it goes.
-				const behind = settle(trail().slice(0, at() + 1).filter((step) => step !== id))
-				const ahead = trail().slice(at() + 1).filter((step) => step !== id)
-				setTrail(settle([...behind, ...ahead]))
-				setAt(behind.length - 1)
-				setPages(pages().filter((page) => page.id !== id))
-			})
+		close,
+		closeOthers: (id) =>
+			closeEach(pages().map((page) => page.id).filter((other) => other !== HOME && other !== id)),
+		closeBelow: (id) => {
+			const ids = pages().map((page) => page.id)
+			const from = ids.indexOf(id)
+			if (from >= 0) closeEach(ids.slice(from + 1))
 		},
+		closeAll: () => closeEach(pages().map((page) => page.id).filter((id) => id !== HOME)),
+		reopen: () => {
+			const page = [...closed()].reverse().find((entry) => !isOpen(entry.id))
+			if (!page) return
+			setClosed(closed().filter((entry) => entry !== page))
+			open(page)
+		},
+		canReopen: () => closed().some((entry) => !isOpen(entry.id)),
 		back: () => setAt(Math.max(0, at() - 1)),
 		forward: () => setAt(Math.min(trail().length - 1, at() + 1)),
 		canGoBack: () => at() > 0,
@@ -265,6 +309,24 @@ export function AppShell(props: AppShellProps) {
 	const tabId = (id: string) => `${base}-tab-${encodeURIComponent(id)}`
 	const pageId = (id: string) => `${base}-page-${encodeURIComponent(id)}`
 	const several = () => props.shell.pages().length > 1
+
+	// Ctrl+Shift+T opens the page closed last again, as it does a browser's tab.
+	// The strip's menu has the same, but closing the last page takes the strip
+	// away with it. A browser keeps the keys for its own tabs; the desktop
+	// window has none of its own.
+	onMount(() => {
+		const onKey = (event: KeyboardEvent) => {
+			if (
+				(event.ctrlKey || event.metaKey) && event.shiftKey && !event.altKey &&
+				event.key.toLowerCase() === "t"
+			) {
+				event.preventDefault()
+				props.shell.reopen()
+			}
+		}
+		addEventListener("keydown", onKey)
+		onCleanup(() => removeEventListener("keydown", onKey))
+	})
 
 	return (
 		<AppShellContext.Provider value={props.shell}>
@@ -525,9 +587,25 @@ function PageTabs(props: {
 		props.shell.close(id)
 		// Its tab is gone, and focus with it; put focus on the tab that took over
 		// rather than letting it fall to the page.
-		if (showing) {
-			queueMicrotask(() => list()?.querySelector<HTMLElement>("[aria-selected='true']")?.focus())
-		}
+		if (showing) refocus()
+	}
+	const refocus = () =>
+		queueMicrotask(() => list()?.querySelector<HTMLElement>("[aria-selected='true']")?.focus())
+
+	// The tab a menu was asked for — with the secondary button, the Menu key or
+	// Shift+F10 — and where to open it.
+	const [menu, setMenu] = createSignal<{ id: string; x: number; y: number }>()
+	const menuPage = () => props.shell.pages().find((page) => page.id === menu()?.id)
+	const below = () => {
+		const ids = props.shell.pages().map((page) => page.id)
+		const from = ids.indexOf(menu()?.id ?? "")
+		return from >= 0 && from < ids.length - 1
+	}
+	/** Runs a menu's action, then puts focus back on the strip: the tab it was
+	 *  on may be gone, and the page beside it is not where a keyboard was. */
+	const act = (action: () => void) => () => {
+		action()
+		refocus()
 	}
 
 	return (
@@ -570,6 +648,7 @@ function PageTabs(props: {
 							if (arrived) afterPaint(() => setPopping(true))
 							const preview = () =>
 								typeof page.preview === "function" ? page.preview() : page.preview
+							const [tip, setTip] = createSignal(false)
 
 							return (
 								<div
@@ -589,6 +668,21 @@ function PageTabs(props: {
 									onAuxClick={(event) => {
 										if (event.button === 1 && closable()) close(page.id)
 									}}
+									// A tab's menu, as a browser's tabs have one. From the keyboard
+									// the event comes from the focused tab, placed wherever the
+									// browser likes; a press that is not on the tab opens the menu
+									// at the tab's trailing edge instead.
+									onContextMenu={(event) => {
+										event.preventDefault()
+										const box = event.currentTarget.getBoundingClientRect()
+										const onTab = event.clientX >= box.left && event.clientX <= box.right &&
+											event.clientY >= box.top && event.clientY <= box.bottom
+										setMenu({
+											id: page.id,
+											x: onTab ? event.clientX : box.right,
+											y: onTab ? event.clientY : box.top,
+										})
+									}}
 									class={`group relative flex flex-col ${
 										!arrived
 											? ""
@@ -598,6 +692,10 @@ function PageTabs(props: {
 									}`}
 								>
 									<CorvuTooltip
+										// Held shut while a tab's menu is open: the card would stand
+										// over the menu it was asked beside.
+										open={tip() && menu() === undefined}
+										onOpenChange={setTip}
 										placement="right-start"
 										group={props.group}
 										openDelay={100}
@@ -694,6 +792,57 @@ function PageTabs(props: {
 					</For>
 				</div>
 			</div>
+
+			{
+				/* One menu for the strip, opened over the tab it was asked for. The
+			    browser's tab menu, less what has no meaning for a page that is an
+			    instance — no reload, no duplicate. */
+			}
+			<Menu
+				label={menuPage()?.title ?? "Tab"}
+				open={menu() !== undefined}
+				x={menu()?.x}
+				y={menu()?.y}
+				onClose={() => setMenu(undefined)}
+			>
+				<MenuItem
+					label="Close tab"
+					shortcut="Delete"
+					disabled={menu()?.id === HOME}
+					onClick={act(() => {
+						const id = menu()?.id
+						if (id) props.shell.close(id)
+					})}
+				/>
+				<MenuItem
+					label="Close other tabs"
+					disabled={props.shell.pages().length <= (menu()?.id === HOME ? 1 : 2)}
+					onClick={act(() => {
+						const id = menu()?.id
+						if (id) props.shell.closeOthers(id)
+					})}
+				/>
+				<MenuItem
+					label="Close tabs below"
+					disabled={!below()}
+					onClick={act(() => {
+						const id = menu()?.id
+						if (id) props.shell.closeBelow(id)
+					})}
+				/>
+				<MenuItem
+					label="Close all tabs"
+					disabled={props.shell.pages().length <= 1}
+					onClick={act(() => props.shell.closeAll())}
+				/>
+				<MenuItemDivider />
+				<MenuItem
+					label="Reopen closed tab"
+					shortcut="Ctrl+Shift+T"
+					disabled={!props.shell.canReopen()}
+					onClick={act(() => props.shell.reopen())}
+				/>
+			</Menu>
 		</nav>
 	)
 }

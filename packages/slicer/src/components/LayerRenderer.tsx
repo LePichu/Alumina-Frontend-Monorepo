@@ -19,9 +19,9 @@ export type LayerRendererProps = {
 	/** Its ink solid, if it has one. */
 	ink?: BufferGeometry
 	show?: RendererShow
-	/** Print layers revealed, from 0 to `layers`. */
-	layer: number
-	layers: number
+	/** How much of the part is shown, 0 to 1 up its height. Nothing shown is a
+	 *  part not yet printed, drawn as a ghost of all of it. */
+	reveal: number
 	view?: RendererView
 	/** Radians added to the view's azimuth and elevation, from the rotate stick. */
 	spin?: number
@@ -37,10 +37,13 @@ export type LayerRendererProps = {
 
 /** A part mica made, on the design system's BoardView.
  *
- *  All this owns is *what* is drawn and *how much of it* — the part or its ink,
- *  and the layer slider as a reveal fraction. The drawing lives in `design`,
- *  because quarry sweeps the same clip upward to look like printing and a
- *  second copy would drift.
+ *  All this owns is *what* is drawn and *how much of it* — the part, its ink or
+ *  both, and the layer slider as a reveal fraction. The reveal is drawn as a
+ *  section: the layers up to the slider, the last one filled where it was cut —
+ *  white body, ink in pure ink — so the slider shows what has been printed, not
+ *  a solid with its top sliced off. The drawing lives in `design`, because
+ *  quarry sweeps the same clip upward to look like printing and a second copy
+ *  would drift.
  */
 export function LayerRenderer(props: LayerRendererProps) {
 	// The view is made a beat after the page. Making a WebGL context holds the
@@ -54,18 +57,23 @@ export function LayerRenderer(props: LayerRendererProps) {
 	})
 
 	const show = () => (props.ink ? props.show ?? "all" : "shell")
-	// Ink alone is drawn as solids in ink: the conductors' own shape.
-	const geometry = () => (show() === "ink" ? props.ink : props.body)
+	// The body is always what the view is framed on, so the board stays put as
+	// the switch goes between the part and its ink. Ink alone is drawn as solids
+	// in ink: the conductors' own shape.
 	const ink = () => (show() === "shell" ? undefined : props.ink)
 
 	return (
 		<BoardView
-			geometry={settled() ? geometry() : undefined}
+			geometry={settled() ? props.body : undefined}
 			ink={settled() ? ink() : undefined}
+			inkOnly={show() === "ink"}
+			section
+			// Nothing printed yet: the whole part, faded, as what the print will be.
+			ghost={props.reveal <= 0}
 			angle={props.view ?? "iso"}
 			spin={props.spin}
 			tilt={props.tilt}
-			reveal={props.layers > 0 ? props.layer / props.layers : 1}
+			reveal={props.reveal}
 			fitToken={props.fitToken}
 			transparent
 			fallback={props.waiting ?? "Loading the part"}

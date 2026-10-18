@@ -16,6 +16,10 @@ import type { MicaBoard, MicaOptions, MicaRun } from "./mica"
 export type BoardHeader = {
 	revision: string
 	rows: { label: string; value: string }[]
+	/** The finished board's thickness in millimetres, as its stackup states it.
+	 *  mica does not read the stackup — its thickness is an option, 1.6 mm unless
+	 *  told — so this is what the board is sliced at unless it is set by hand. */
+	thickness?: number
 }
 
 export type OpenBoard = {
@@ -58,6 +62,7 @@ export function readHeader(document: string, file: string): BoardHeader {
 
 	const revisionId = read("FileRevision", "fileRevisionId")
 	const units = doc.querySelector("[units]")?.getAttribute("units")
+	const thickness = stackupThickness(doc, units)
 	const mode = read("FunctionMode", "mode")
 	const date = read("HistoryRecord", "lastChange") ?? read("HistoryRecord", "origination")
 
@@ -69,10 +74,37 @@ export function readHeader(document: string, file: string): BoardHeader {
 			{ label: "generated", value: read("HistoryRecord", "software") },
 			{ label: "date", value: date?.slice(0, 10) },
 			{ label: "units", value: units === "INCH" ? "in" : units ? "mm" : undefined },
+			{
+				label: "stackup",
+				value: thickness === undefined ? undefined : `${Number(thickness.toFixed(3))} mm`,
+			},
 			{ label: "role", value: mode && mode.charAt(0) + mode.slice(1).toLowerCase() },
 			{ label: "file", value: file },
 		].filter((row): row is { label: string; value: string } => Boolean(row.value)),
+		thickness,
 	}
+}
+
+/** Millimetres in one of the file's units. */
+const MILLIMETRES: Record<string, number> = { MILLIMETER: 1, MICRON: 0.001, INCH: 25.4 }
+
+/** The finished thickness the stackup states: its own overall figure, else its
+ *  group's, else its layers added up. Not every board stacks to 1.6 mm. */
+function stackupThickness(doc: Document, units: string | null | undefined): number | undefined {
+	const scale = MILLIMETRES[units ?? "MILLIMETER"] ?? 1
+	const positive = (raw: string | null | undefined) => {
+		const value = raw === null || raw === undefined ? NaN : Number(raw)
+		return Number.isFinite(value) && value > 0 ? value * scale : undefined
+	}
+	const stackup = doc.getElementsByTagNameNS("*", "Stackup")[0]
+	if (!stackup) return undefined
+	const overall = positive(stackup.getAttribute("overallThickness")) ??
+		positive(stackup.getElementsByTagNameNS("*", "StackupGroup")[0]?.getAttribute("thickness"))
+	if (overall !== undefined) return overall
+	const layers = [...stackup.getElementsByTagNameNS("*", "StackupLayer")]
+		.map((layer) => positive(layer.getAttribute("thickness")) ?? 0)
+		.reduce((total, part) => total + part, 0)
+	return layers > 0 ? layers : undefined
 }
 
 function assemble(board: MicaBoard, file: string, document: string): OpenBoard {

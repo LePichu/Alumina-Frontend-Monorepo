@@ -132,6 +132,34 @@ export function createWindowControls(): Accessor<WindowControls | undefined> {
 	return controls
 }
 
+/** Fields a right-click may keep the host's menu in: its cut, copy and paste
+ *  are the field's own actions. Not a checkbox, radio, slider or file input. */
+const EDITABLE =
+	"textarea, [contenteditable=''], [contenteditable='true'], input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=button]):not([type=submit])"
+
+/** Right-click does nothing where nothing has a menu of its own, for as long as
+ *  the app runs; returns the way to stop.
+ *
+ *  Left alone, the host shows its own menu anywhere on the page — in the
+ *  desktop window WebKit's Back, Reload and Inspect Element, which reload the
+ *  app out from under every open tab. Something that has a menu (a tab in the
+ *  strip, a recent board) opens it first and says so by preventing the
+ *  default; what reaches the window untaken is cancelled. Two places keep the
+ *  host's menu, because its actions are theirs: a text field (cut, copy,
+ *  paste) and selected text (copy).
+ */
+export function ignoreStrayContextMenus(): () => void {
+	const onContextMenu = (event: MouseEvent) => {
+		if (event.defaultPrevented) return
+		if (event.target instanceof Element && event.target.closest(EDITABLE)) return
+		const selection = getSelection()
+		if (selection && !selection.isCollapsed && selection.toString().trim() !== "") return
+		event.preventDefault()
+	}
+	addEventListener("contextmenu", onContextMenu)
+	return () => removeEventListener("contextmenu", onContextMenu)
+}
+
 /** A drag of files over the desktop window, as the window reports it: where
  *  the pointer is, in the page's own pixels, and — once let go — the files. */
 export type HostDrag =

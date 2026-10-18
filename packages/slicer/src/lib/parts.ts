@@ -1,13 +1,18 @@
 /** What a run made, as the parts the stage can show, and their meshes.
  *
- *  Every file mica writes is in the board's own coordinates: the assembly is the
- *  slabs stacked as they are laminated, each slab lies flat as it is printed
- *  (the bottom one already mirrored) with its ink solid in the same frame, and
- *  the fixtures stand round the board where they go. So any one part can be
- *  shown on its own, and a slab with its ink.
+ *  Every file mica writes is in the board's own coordinates: each slab lies flat
+ *  as it is printed (the bottom one already mirrored) with its ink solid in the
+ *  same frame, and the fixtures stand round the board where they go. So any one
+ *  part can be shown on its own, and a slab with its ink.
+ *
+ *  The assembly is drawn from the slabs, not from mica's `assembly.stl`. That
+ *  file is the same stack as one solid with no ink, so the stage showed the
+ *  board's layers as one block, cut by the reveal, with nothing in its channels.
+ *  Built here, each slab is put where mica's own assembly puts it, and carries
+ *  its ink there.
  */
 
-import type { BufferGeometry } from "three"
+import { BufferAttribute, BufferGeometry, Matrix4 } from "three"
 import { runFile } from "./mica"
 import type { MicaRun } from "./mica"
 import { parseBinaryStl } from "./stl"
@@ -23,7 +28,13 @@ export type Part = {
 	file: string
 	/** Its ink solid, for a slab — when mica wrote one. */
 	ink?: string
+	/** For the assembly: the slabs it is made of, bottom first, each drawn where
+	 *  it is laminated. */
+	stack?: Slab[]
 }
+
+/** A slab as the stage stacks it, by the copper layer it carries. */
+type Slab = { file: string; ink?: string; flipped: boolean; layer: string }
 
 /** What the board-level fixtures are, as mica's API describes them. */
 const FIXTURES: Record<string, string> = {
@@ -56,6 +67,12 @@ export function partsOf(run: MicaRun): Part[] {
 			}))
 	}
 
+	const slabs = run.slabs.flatMap((slab) => {
+		const ink = slab.files.find((file) => /_ink\.stl$/i.test(file))
+		const body = slab.files.find((file) => file !== ink)
+		return body ? [{ slab, body, ink }] : []
+	})
+
 	const parts: Part[] = []
 	if (fixtures.has("assembly.stl")) {
 		parts.push({
@@ -64,12 +81,19 @@ export function partsOf(run: MicaRun): Part[] {
 			label: "Assembly",
 			detail: `${run.slabs.length} slabs, as laminated`,
 			file: "assembly.stl",
+			stack: slabs.length === run.slabs.length
+				? [...slabs]
+					.sort((a, b) => a.slab.index - b.slab.index)
+					.map(({ slab, body, ink }) => ({
+						file: body,
+						ink,
+						flipped: slab.flipped,
+						layer: slab.layer,
+					}))
+				: undefined,
 		})
 	}
-	for (const slab of run.slabs) {
-		const ink = slab.files.find((file) => /_ink\.stl$/i.test(file))
-		const body = slab.files.find((file) => file !== ink)
-		if (!body) continue
+	for (const { slab, body, ink } of slabs) {
 		parts.push({
 			id: `slab-${slab.index}`,
 			group: "Slabs",
@@ -118,14 +142,113 @@ export function meshOf(run: MicaRun, file: string): Promise<BufferGeometry> {
 	return mesh
 }
 
+/** One of the board's own layers in a stack: the copper layer a slab carries,
+ *  and the height of the stack's top once that slab is on. */
+export type Stop = { label: string; top: number }
+
+type Meshes = {
+	body: BufferGeometry
+	ink?: BufferGeometry
+	/** For the assembly: where each slab's top is, bottom first — what the
+	 *  slider steps through on a board, rather than print layers. */
+	stops?: Stop[]
+}
+
 /** A part's meshes: its body, and its ink if it has one. */
-export async function partMeshes(
-	run: MicaRun,
-	part: Part,
-): Promise<{ body: BufferGeometry; ink?: BufferGeometry }> {
-	const [body, ink] = await Promise.all([
+export function partMeshes(run: MicaRun, part: Part): Promise<Meshes> {
+	if (part.stack) return stackOf(run, part.stack)
+	return Promise.all([
 		meshOf(run, part.file),
 		part.ink ? meshOf(run, part.ink) : Promise.resolve(undefined),
-	])
-	return { body, ink }
+	]).then(([body, ink]) => ({ body, ink }))
+}
+
+/** Stacks already built, by run. */
+const stacks = new Map<string, Promise<Meshes>>()
+
+/** The slabs stacked as they are laminated, with their ink: one solid of the
+ *  bodies and one of the ink.
+ *
+ *  Placed as mica places them in `assembly.stl` (`pipeline.rs`): each slab
+ *  stands on the ones before it, and the flipped one — printed mirrored about
+ *  the board's centre line, so that it can be turned over after curing — is
+ *  mirrored back and turned over. Mirroring in x and turning over in z is a
+ *  half turn about y, so no face changes its winding. */
+function stackOf(run: MicaRun, stack: Slab[]): Promise<Meshes> {
+	const key = runKey(run)
+	let built = stacks.get(key)
+	if (!built) {
+		built = Promise.all(
+			stack.map(async (slab) => ({
+				slab,
+				body: await meshOf(run, slab.file),
+				ink: slab.ink ? await meshOf(run, slab.ink) : undefined,
+			})),
+		).then((slabs) => {
+			const bodies: BufferGeometry[] = []
+			const inks: BufferGeometry[] = []
+			const stops: Stop[] = []
+			let floor = 0
+			for (const { slab, body, ink } of slabs) {
+				body.computeBoundingBox()
+				const box = body.boundingBox
+				if (!box) continue
+				// mica mirrors about the middle of the board's outline, which is the
+				// middle of the slab too: mirroring about it keeps the slab's extent.
+				const axis = (box.min.x + box.max.x) / 2
+				const place = slab.flipped
+					? new Matrix4().set(
+						-1,
+						0,
+						0,
+						2 * axis,
+						0,
+						1,
+						0,
+						0,
+						0,
+						0,
+						-1,
+						floor + box.max.z,
+						0,
+						0,
+						0,
+						1,
+					)
+					: new Matrix4().makeTranslation(0, 0, floor - box.min.z)
+				bodies.push(body.clone().applyMatrix4(place))
+				if (ink) inks.push(ink.clone().applyMatrix4(place))
+				floor += box.max.z - box.min.z
+				stops.push({ label: slab.layer, top: floor })
+			}
+			return {
+				body: joined(bodies),
+				ink: inks.length ? joined(inks) : undefined,
+				stops,
+			}
+		})
+		built.catch(() => stacks.delete(key))
+		stacks.set(key, built)
+	}
+	return built
+}
+
+/** Triangle soups as one: every mesh mica writes is unindexed, with a position
+ *  and a normal per corner. */
+function joined(geometries: BufferGeometry[]): BufferGeometry {
+	const merged = new BufferGeometry()
+	for (const name of ["position", "normal"]) {
+		const parts = geometries.map((geometry) => geometry.getAttribute(name).array)
+		const array = new Float32Array(
+			parts.reduce((total, part) => total + part.length, 0),
+		)
+		let at = 0
+		for (const part of parts) {
+			array.set(part, at)
+			at += part.length
+		}
+		merged.setAttribute(name, new BufferAttribute(array, 3))
+	}
+	for (const geometry of geometries) geometry.dispose()
+	return merged
 }

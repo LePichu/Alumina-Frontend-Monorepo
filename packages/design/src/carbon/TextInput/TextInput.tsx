@@ -18,6 +18,10 @@ import type { FieldCommonProps } from "../../internal/field"
 
 export type TextInputProps = FieldCommonProps & {
 	type?: "text" | "email" | "password" | "tel" | "url" | "number"
+	/** The browser's autofill hint for what the field holds — `email`,
+	 *  `username`, `name`, `off` — so a sign-in form is offered the address the
+	 *  browser or a password manager keeps. */
+	autocomplete?: "email" | "username" | "name" | "tel" | "url" | "off"
 	placeholder?: string
 	value?: string
 	disabled?: boolean

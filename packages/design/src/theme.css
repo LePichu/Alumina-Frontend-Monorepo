@@ -765,4 +765,14 @@
 		outline: 0.125rem solid var(--focus-ink, var(--color-ink));
 		outline-offset: 0.125rem;
 	}
+
+	/* A quotation, or a note set apart from what it sits in: a 4px ink rule down
+	   its leading edge — the system's flagged rule, stood on end — and the text
+	   16px in from it. No box and no ground: it is text, set aside.
+	   foundry's sign-in card ends on one. */
+	blockquote {
+		margin: 0;
+		padding-left: 1rem;
+		border-left: 0.25rem solid var(--color-ink);
+	}
 }

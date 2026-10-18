@@ -2,6 +2,7 @@ import { createResource, createSignal, For, Show } from "solid-js"
 import Chip from "@carbon/icons/es/chip/16"
 import Cube from "@carbon/icons/es/cube/16"
 import Information from "@carbon/icons/es/information/16"
+import Login from "@carbon/icons/es/login/16"
 import PrinterIcon from "@carbon/icons/es/printer/16"
 import User from "@carbon/icons/es/user/16"
 import View from "@carbon/icons/es/view/16"
@@ -27,7 +28,6 @@ import {
 } from "@alumina/design"
 import avatarUrl from "../fixtures/avatar.jpg?url"
 import { APP_KIND, APP_NAME, APP_VERSION } from "../lib/app"
-import { getAccount } from "../lib/cloud"
 import { cacheStats, MICA_DEFAULT, micaAddress, micaRoute, setMicaAddress } from "../lib/mica"
 import { inDesktop, ZOOMS } from "../lib/window"
 import { MachineFields, TOOL_CHANGE_NOTE } from "./MachineTile"
@@ -63,7 +63,7 @@ export type SettingsPane = (typeof SETTINGS_PANES)[number]["id"]
  */
 export function SettingsPage() {
 	const studio = useStudio()
-	const [account] = createResource(() => getAccount())
+	const account = studio.account
 	const printer = () => studio.printers()?.[studio.printer()]
 	// What mica holds, read when its pane is shown and again on asking.
 	const [store, { refetch: recount }] = createResource(
@@ -366,6 +366,24 @@ export function SettingsPage() {
 
 								{/* ---- account ---- */}
 								<TabPanel>
+									<Show when={account.state === "ready" && !account()}>
+										<TileSection>
+											<FormGroup
+												legendText="Not signed in"
+												helperText="Foundry works without an account. One keeps your boards in the cloud, publishes them to quarry and brings the news."
+											>
+												<Button
+													kind="primary"
+													size="sm"
+													flat
+													renderIcon={Login}
+													onClick={() => studio.openSignIn()}
+												>
+													Sign in
+												</Button>
+											</FormGroup>
+										</TileSection>
+									</Show>
 									<Show when={account()}>
 										{(user) => (
 											<>
@@ -390,7 +408,11 @@ export function SettingsPage() {
 																		{user().plan} · slices for {user().machine}
 																	</small>
 																</span>
-																<Button kind="tertiary" size="sm">
+																<Button
+																	kind="tertiary"
+																	size="sm"
+																	onClick={() => void studio.signOut()}
+																>
 																	Sign out
 																</Button>
 															</div>

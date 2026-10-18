@@ -34,7 +34,8 @@ export type SettingsPanelProps = {
 	/** What an option is set to: the operator's, else the last run's, else mica's default. */
 	value: (spec: MicaOptionSpec) => OptionValue
 	onOptionChange: (name: string, value: OptionValue) => void
-	/** Back to mica's defaults for every option. */
+	/** Back to the board's own options — its stackup's thickness — and mica's
+	 *  defaults for the rest. */
 	onOptionsReset: () => void
 	modules: ToolModule[]
 	machine: MachineSettings
@@ -164,7 +165,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 										flat
 										onClick={props.onOptionsReset}
 									>
-										mica's defaults
+										Defaults
 									</Button>
 								</TileSection>
 							</Show>

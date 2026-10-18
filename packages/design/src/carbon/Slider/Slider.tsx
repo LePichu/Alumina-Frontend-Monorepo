@@ -1,4 +1,4 @@
-import { children, createMemo, For, Show } from "solid-js"
+import { children, createEffect, createMemo, For, Show } from "solid-js"
 import type { JSX } from "solid-js"
 import { createControllable, createId } from "../../internal/control"
 import { LABEL } from "../../internal/styles"
@@ -107,6 +107,21 @@ export function Slider(props: SliderProps) {
 		() => props.onChange,
 	)
 
+	// A range input clamps its value to the bounds it has at that moment. When
+	// the bounds and the value change together — a part loading, its slider
+	// going from 0–1 to 0–4 and to 4 — the value can be written before the new
+	// max and be cut down to the old one, which leaves the thumb at 1 while the
+	// slider says 4. So the value is written again once the bounds are in: an
+	// effect runs after the attributes are set. The attribute stays for the
+	// first paint, before any effect.
+	let lowerInput: HTMLInputElement | undefined
+	let upperInput: HTMLInputElement | undefined
+	createEffect(() => {
+		void [props.min, props.max, step()]
+		if (lowerInput) lowerInput.value = String(value())
+		if (upperInput) upperInput.value = String(upper())
+	})
+
 	const percentOf = (amount: number) => {
 		const span = props.max - props.min
 		if (span <= 0) return 0
@@ -191,6 +206,7 @@ export function Slider(props: SliderProps) {
 					</For>
 
 					<input
+						ref={lowerInput}
 						id={id()}
 						type="range"
 						min={props.min}
@@ -212,6 +228,7 @@ export function Slider(props: SliderProps) {
 					}
 					<Show when={ranged()}>
 						<input
+							ref={upperInput}
 							type="range"
 							aria-label={props.unstable_ariaLabelInputUpper ?? "Upper bound"}
 							name={props.unstable_nameUpper}

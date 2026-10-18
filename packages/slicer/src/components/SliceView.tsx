@@ -109,9 +109,10 @@ export type SliceViewProps = {
  *  page rather than the window, since the window's top and left edge are the
  *  shell's.
  *
- *  The board is converted as the page opens, at mica's defaults, and again on
- *  "Slice" with whatever options have been set since: a slice is asked for, as
- *  a slicer's is, rather than rerun on every keystroke. The same options are the
+ *  The board is converted as the page opens — at its own thickness, as its
+ *  stackup states it, and mica's defaults for the rest — and again on "Slice"
+ *  with whatever options have been set since: a slice is asked for, as a
+ *  slicer's is, rather than rerun on every keystroke. The same options are the
  *  same run, which mica answers from its store.
  *
  *  (It is the next screen due to move onto the 25/75 `Workspace`; see "The
@@ -125,8 +126,16 @@ export function SliceView(props: SliceViewProps) {
 	// On a narrow screen the board is what you came for, so it is what you get.
 	const [pane, setPane] = createSignal<Pane>("stage")
 
-	// What the operator has set. An option left out is mica's default.
+	// What the operator has set. An option left out is the board's own — its
+	// thickness, as its stackup states it — else mica's default. mica reads no
+	// thickness from the file and would slice every board as 1.6 mm.
 	const [options, setOptions] = createStore<Partial<MicaOptions>>({})
+	const own: Partial<MicaOptions> = props.open.header.thickness === undefined
+		? {}
+		: { thickness: props.open.header.thickness }
+	/** What a slice is asked for with: the board's own options, and what has
+	 *  been set over them. */
+	const asked = () => ({ ...own, ...options })
 	const [run, setRun] = createSignal<MicaRun>()
 	const [running, setRunning] = createSignal(false)
 	const [failure, setFailure] = createSignal<string>()
@@ -135,7 +144,7 @@ export function SliceView(props: SliceViewProps) {
 		setRunning(true)
 		setFailure(undefined)
 		try {
-			setRun(await runOpen(props.open, { ...options }))
+			setRun(await runOpen(props.open, asked()))
 		} catch (error) {
 			setFailure(error instanceof Error ? error.message : String(error))
 			// A mica that is not there is the app's news, not this page's alone.
@@ -146,10 +155,10 @@ export function SliceView(props: SliceViewProps) {
 	}
 	onMount(() => void slice())
 
-	/** An option as its field shows it: set here, else as the last run had it,
-	 *  else mica's default. */
+	/** An option as its field shows it: set here or the board's own, else as the
+	 *  last run had it, else mica's default. */
 	const value = (spec: MicaOptionSpec): OptionValue =>
-		(options as Record<string, OptionValue | undefined>)[spec.name] ??
+		(asked() as Record<string, OptionValue | undefined>)[spec.name] ??
 			(run()?.options as Record<string, OptionValue> | undefined)?.[spec.name] ??
 			spec.default
 
@@ -157,7 +166,7 @@ export function SliceView(props: SliceViewProps) {
 	const stale = createMemo(() => {
 		const current = run()
 		if (!current) return false
-		return Object.entries(options).some(
+		return Object.entries(asked()).some(
 			([name, set]) =>
 				set !== undefined && set !== (current.options as Record<string, unknown>)[name],
 		)
@@ -182,6 +191,11 @@ export function SliceView(props: SliceViewProps) {
 	// the last part it loaded, which is not this run's.
 	const body = () => (part() && meshes.state === "ready" ? meshes().body : undefined)
 	const ink = () => (part() && meshes.state === "ready" ? meshes().ink : undefined)
+	/** On the assembly, the board's own layers — one slab after another, by the
+	 *  copper layer each carries, as the file has them. The assembly is never one
+	 *  print: each slab is printed on its own and laminated, so a slider over the
+	 *  stack's print layers (eight for a two-layer board) counted nothing real. */
+	const stops = () => (part() && meshes.state === "ready" ? meshes().stops : undefined)
 	const thickness = createMemo(() => {
 		const geometry = body()
 		if (!geometry) return 0
@@ -189,10 +203,15 @@ export function SliceView(props: SliceViewProps) {
 		const box = geometry.boundingBox
 		return box ? box.max.z - box.min.z : 0
 	})
-	/** Print layers in the part: its height over the run's layer height. */
+	/** What the slider steps through: the board's layers on the assembly, else
+	 *  the part's print layers — its height over the run's layer height, the last
+	 *  one counted even when it is not whole (a 3.1 mm jig at 0.2 mm is sixteen
+	 *  layers, not fifteen and a lost top). */
 	const layers = createMemo(() => {
+		const board = stops()
+		if (board) return board.length
 		const height = run()?.options.layer_height ?? 0
-		return height > 0 && thickness() > 0 ? Math.max(1, Math.round(thickness() / height)) : 1
+		return height > 0 && thickness() > 0 ? Math.max(1, Math.ceil(thickness() / height - 1e-6)) : 1
 	})
 	// All of a part shows until the slider says otherwise; a new part starts whole.
 	const [layer, setLayer] = createSignal<number>()
@@ -325,6 +344,7 @@ export function SliceView(props: SliceViewProps) {
 								: undefined}
 							layer={shownLayer()}
 							layers={layers()}
+							stops={stops()}
 							thickness={thickness()}
 							onLayerChange={setLayer}
 							sheet={sheet()}

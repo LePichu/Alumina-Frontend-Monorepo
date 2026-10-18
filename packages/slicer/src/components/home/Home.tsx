@@ -31,7 +31,7 @@ import {
 	Workspace,
 } from "@alumina/design"
 import type { CarbonGlyph } from "@alumina/design"
-import { getAccount, listNews } from "../../lib/cloud"
+import { listNews } from "../../lib/cloud"
 import { BOARD_FILES, pickFiles } from "../../lib/files"
 import { micaRoute } from "../../lib/mica"
 import { ago } from "../../lib/recent"
@@ -333,7 +333,7 @@ function ProjectCard(props: { entry: RecentBoard }) {
 function Newsletter() {
 	const studio = useStudio()
 	const [news] = createResource(() => listNews())
-	const [account] = createResource(() => getAccount())
+	const account = studio.account
 
 	return (
 		<Tile
@@ -369,7 +369,8 @@ function Newsletter() {
 			<TileSection>
 				<span class="flex items-center gap-2">
 					<span class="min-w-0 flex-1 truncate text-small opacity-muted">
-						To {account.state === "ready" ? account().email : "your account"}
+						To {(account.state === "ready" ? account()?.email : undefined) ??
+							"your account, once you sign in"}
 					</span>
 					<Button kind="secondary" size="sm" flat onClick={() => void studio.subscribe()}>
 						Subscribe

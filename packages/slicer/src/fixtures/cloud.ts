@@ -7,6 +7,10 @@
 
 import type { Account, NewsItem } from "../lib/cloud"
 
+/** The sign-in prototype refuses an address here, so the refusal can be seen:
+ *  the dummy company's domain. */
+export const REFUSED_DOMAIN = "pixelexia.com"
+
 export const ACCOUNT: Account = {
 	handle: "avthenticstemcel",
 	email: "avthenticstemcel@alumina.cloud",

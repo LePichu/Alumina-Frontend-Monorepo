@@ -18,6 +18,7 @@ import {
 import { Icon } from "../../icons/Icon"
 import { STATUS_GLYPH } from "../../internal/severity"
 import { Loading } from "../../carbon/Loading/Loading"
+import { sectionFill, sectionLoops, sectionOutline } from "./section"
 
 /** Where the camera sits. Angles are taken about +Z, since every board Alumina
  *  handles is a Z-up solid: wide in X and Y, thin in Z. */
@@ -39,6 +40,21 @@ export type BoardViewProps = {
 	 *  what makes a layer reveal and a print sweep the same mechanism. 1 shows the
 	 *  whole board. */
 	reveal?: number
+	/** Draws the cut as what it leaves: the part under the plane, filled where
+	 *  the plane crosses it — the board in white, the ink in ink — and outlined,
+	 *  as the layer that was printed last. Without it the plane only takes away
+	 *  what is above, and the solid is left open: a shell with its walls
+	 *  standing round nothing. For a reveal that shows printing, layer by layer
+	 *  (foundry); it needs closed solids, as mica writes them. */
+	section?: boolean
+	/** Draws the ink alone. The board is still what the view is framed on and
+	 *  what the reveal runs up, so switching to the ink and back does not move
+	 *  the board in the frame. */
+	inkOnly?: boolean
+	/** Draws the whole board, faded to the system's opacity for something not
+	 *  yet made, whatever the reveal says: what a print will be before any of it
+	 *  is printed. On a transparent view the backdrop shows through it. */
+	ghost?: boolean
 	/** Draws onto whatever is behind instead of onto white. The backdrop is part
 	 *  of the page in mica and part of the tile in quarry. */
 	transparent?: boolean
@@ -74,7 +90,26 @@ const ANGLES: Record<BoardViewAngle, [number, number]> = {
 /** The system's ink as three.js takes a colour: `--color-ink`, read from the
  *  page rather than restated here, so a board follows the system's ink. */
 const inkOf = (element: Element) =>
-	new Color(getComputedStyle(element).getPropertyValue("--color-ink").trim() || "#000")
+	new Color(
+		getComputedStyle(element).getPropertyValue("--color-ink").trim() || "#000",
+	)
+
+/** Faces are pushed back so the ink edges draw cleanly on top instead of
+ *  z-fighting the surfaces they lie on — and the board's a few depth units
+ *  further than the ink's, so where an ink solid fills a channel and shares its
+ *  floor and walls the ink is what shows, not a speckle of the two. Only the
+ *  units differ: the slope factor grows with how steeply a face is seen, and
+ *  on a board seen from the side it pushes a face back by more than a layer. */
+const BOARD_FACE = {
+	polygonOffset: true,
+	polygonOffsetFactor: 1,
+	polygonOffsetUnits: 3,
+}
+const INK_FACE = {
+	polygonOffset: true,
+	polygonOffsetFactor: 1,
+	polygonOffsetUnits: 1,
+}
 
 /** The board as a scene: white faces and ink edges, re-centred on the origin,
  *  with a clipping plane for the reveal. Shared by the live view and the
@@ -84,6 +119,7 @@ function buildBoard(
 	supplied: BufferGeometry | undefined,
 	ink: Color,
 	solids?: BufferGeometry,
+	inkOnly = false,
 ) {
 	geometry.computeBoundingBox()
 	const bounds = geometry.boundingBox ?? new Box3()
@@ -101,14 +137,10 @@ function buildBoard(
 
 	const faces = new Mesh(
 		geometry,
-		// polygonOffset pushes the faces back a touch so the ink edges draw
-		// cleanly on top instead of z-fighting the surface they sit on.
 		new MeshBasicMaterial({
 			color: 0xffffff,
 			clippingPlanes: [plane],
-			polygonOffset: true,
-			polygonOffsetFactor: 1,
-			polygonOffsetUnits: 1,
+			...BOARD_FACE,
 		}),
 	)
 	const edgeGeometry = supplied ?? new EdgesGeometry(geometry, 24)
@@ -116,22 +148,59 @@ function buildBoard(
 		edgeGeometry,
 		new LineBasicMaterial({ color: ink, clippingPlanes: [plane] }),
 	)
-	board.add(faces, edges)
-	// Drawn after the board's faces and pushed back as they are, so where an ink
-	// solid fills a channel its top face shows, not the channel's floor.
+	// With the ink alone the board is not drawn, but it still sets the frame.
+	if (!inkOnly) board.add(faces, edges)
 	const filled = solids
 		? new Mesh(
 			solids,
 			new MeshBasicMaterial({
 				color: ink,
 				clippingPlanes: [plane],
-				polygonOffset: true,
-				polygonOffsetFactor: 1,
-				polygonOffsetUnits: 1,
+				...INK_FACE,
 			}),
 		)
 		: undefined
 	if (filled) board.add(filled)
+
+	// The cut, filled and outlined, when the reveal is drawn as a section. Not
+	// clipped: the plane runs just under it. The fill is pushed back by depth
+	// units alone, so its outline draws on top of it whatever the depth buffer's
+	// precision, and never by the slope factor — that grows with how steeply the
+	// fill is seen, and pushed it behind the layer under it.
+	const cap = new Group()
+	board.add(cap)
+	const CAP_FACE = {
+		polygonOffset: true,
+		polygonOffsetFactor: 0,
+		polygonOffsetUnits: 2,
+	}
+	const capFace = new MeshBasicMaterial({ color: 0xffffff, ...CAP_FACE })
+	const capInk = new MeshBasicMaterial({ color: ink, ...CAP_FACE })
+	const capLine = new LineBasicMaterial({ color: ink })
+	const clearCap = () => {
+		for (const child of [...cap.children]) {
+			if (child instanceof Mesh || child instanceof LineSegments) {
+				child.geometry.dispose()
+			}
+			cap.remove(child)
+		}
+	}
+	/** Fills the cut at `level`, read at `sample` — both in the geometry's own
+	 *  heights — or, given nothing, takes it away. */
+	const cut = (at?: { level: number; sample: number }) => {
+		clearCap()
+		if (!at) return
+		const fill = (solid: BufferGeometry, material: MeshBasicMaterial) => {
+			const loops = sectionLoops(solid, at.sample)
+			if (loops.length === 0) return
+			cap.add(
+				new Mesh(sectionFill(loops, at.level), material),
+				new LineSegments(sectionOutline(loops, at.level), capLine),
+			)
+		}
+		if (!inkOnly) fill(geometry, capFace)
+		if (solids) fill(solids, capInk)
+	}
 	scene.add(board)
 
 	// The eight corners, re-measured in camera space at each fit. An
@@ -148,9 +217,15 @@ function buildBoard(
 	const radius = (Math.max(size.x, size.y, size.z) || 1) * 4
 	const camera = new OrthographicCamera()
 	// Fit near/far to the scene's own extent. Left at the defaults the board
-	// either clips through the near plane or vanishes past the far one.
-	camera.near = 0
-	camera.far = radius * 4
+	// either clips through the near plane or vanishes past the far one. The
+	// camera always stands `radius` from the board's centre, so the board lies
+	// within its diagonal either side of that, at any angle — and kept that
+	// tight, the depth buffer resolves the hair between a section's fill and
+	// the faces under it. (It ran from 0 to four times the radius, and under a
+	// 16-bit depth buffer a channel's floor showed through the fill above it.)
+	const reach = size.length() || 1
+	camera.near = Math.max(0, radius - reach)
+	camera.far = radius + reach
 
 	const dispose = () => {
 		// Only dispose what was built here. A supplied edge geometry belongs to the
@@ -159,9 +234,24 @@ function buildBoard(
 		faces.material.dispose()
 		edges.material.dispose()
 		filled?.material.dispose()
+		clearCap()
+		capFace.dispose()
+		capInk.dispose()
+		capLine.dispose()
 	}
 
-	return { scene, camera, corners, plane, size, radius, dispose }
+	return {
+		scene,
+		camera,
+		corners,
+		plane,
+		size,
+		centre,
+		bottom: bounds.min.z,
+		radius,
+		cut,
+		dispose,
+	}
 }
 
 /** Puts the camera where `angle`, `spin` and `tilt` say. */
@@ -266,8 +356,14 @@ export function BoardView(props: BoardViewProps) {
 		const element = host
 		if (!geometry || !element) return
 
-		const built = buildBoard(geometry, props.edges, inkOf(element), props.ink)
-		const { scene, camera, corners, plane, size, radius } = built
+		const built = buildBoard(
+			geometry,
+			props.edges,
+			inkOf(element),
+			props.ink,
+			props.inkOnly,
+		)
+		const { scene, camera, corners, plane, size, centre, bottom, radius, cut } = built
 
 		const renderer = new WebGLRenderer({ antialias: true, alpha: true })
 		renderer.setClearAlpha(props.transparent ? 0 : 1)
@@ -310,16 +406,30 @@ export function BoardView(props: BoardViewProps) {
 
 		// …and separately on the reveal, which moves far more often.
 		createEffect(() => {
-			const fraction = Math.min(Math.max(props.reveal ?? 1, 0), 1)
-			// The board is centred on the origin, so it spans ±size.z/2. The plane's
-			// normal is -Z, and three keeps fragments where `normal·p + constant >= 0`
-			// — which for this normal is `z <= constant`. The constant is therefore
-			// the cut height itself, not its negation.
-			const bottom = -size.z / 2
-			// A hair past the top at full reveal, never exactly on it: a plane
-			// coplanar with the top face makes every fragment there a coin flip,
-			// which is the speckling the prototype records.
-			plane.constant = bottom + size.z * (fraction >= 1 ? 1.02 : fraction)
+			const fraction = props.ghost ? 1 : Math.min(Math.max(props.reveal ?? 1, 0), 1)
+			// The plane's normal is -Z, and three keeps fragments where
+			// `normal·p + constant >= 0` — which for this normal is `z <= constant`.
+			// The constant is therefore the cut height itself, not its negation, in
+			// the scene's heights: the board is re-centred on the origin.
+			const level = bottom + size.z * fraction
+			if (props.section && fraction < 1) {
+				// A cut at a layer's top is at a height faces lie at — a channel's
+				// floor — and anything there would be a coin flip against the plane,
+				// and a depth tie with the fill. So the plane runs a hair under the
+				// cut and takes those faces with it, the outline is read there (the
+				// layer just printed, as a slicer samples between faces), and the
+				// fill at the cut covers all of it. Nothing is left within a hair of
+				// the fill for the depth buffer to tell apart.
+				const hair = Math.max(size.z * 1e-3, 1e-4)
+				plane.constant = level - centre.z - hair
+				cut({ level, sample: level - hair })
+			} else {
+				// A hair past the top at full reveal, never exactly on it: a plane
+				// coplanar with the top face makes every fragment there a coin flip,
+				// which is the speckling the prototype records.
+				plane.constant = level - centre.z + (fraction >= 1 ? size.z * 0.02 : 0)
+				cut()
+			}
 			frame()
 		})
 
@@ -333,7 +443,17 @@ export function BoardView(props: BoardViewProps) {
 
 	return (
 		<div class={`relative ${props.class ?? ""}`}>
-			<div ref={host} class="absolute inset-0" />
+			{
+				/* Faded as a whole, not face by face: translucent faces would show the
+			    board's hidden edges through it, and a ghost is the board's outline
+			    seen dimly, not an X-ray. */
+			}
+			<div
+				ref={host}
+				class={`absolute inset-0 transition-opacity duration-200 ${
+					props.ghost ? "opacity-40" : ""
+				}`}
+			/>
 			<Show when={!props.geometry}>
 				<div class="absolute inset-0 flex items-center justify-center">
 					<Show

@@ -1,4 +1,4 @@
-import { createSignal, For, onCleanup } from "solid-js"
+import { createSignal, For, onCleanup, Show } from "solid-js"
 import type { BufferGeometry } from "three"
 import Cube from "@carbon/icons/es/cube/16"
 import FitToScreen from "@carbon/icons/es/fit-to-screen/16"
@@ -10,6 +10,7 @@ import PrinterIcon from "@carbon/icons/es/printer/16"
 import Template from "@carbon/icons/es/template/16"
 import { ContentSwitcher, IconButton, IconButtonGroup, Slider, Switch, Tile } from "@alumina/design"
 import type { CarbonGlyph } from "@alumina/design"
+import type { Stop } from "../lib/parts"
 import { LayerRenderer } from "./LayerRenderer"
 import type { RendererShow, RendererView } from "./LayerRenderer"
 import { RotateStick } from "./RotateStick"
@@ -21,8 +22,12 @@ export type ViewportProps = {
 	/** What the stage is waiting for, and why it may have nothing to show. */
 	waiting?: string
 	error?: string
+	/** Where the slider is, from 0 to `layers`. */
 	layer: number
 	layers: number
+	/** The board's own layers, on the assembly: the slider steps slab by slab,
+	 *  each named by its copper layer. Without them it steps by print layer. */
+	stops?: Stop[]
 	onLayerChange: (layer: number) => void
 	/** The part's height in mm, for the readout. */
 	thickness: number
@@ -61,7 +66,16 @@ export function Viewport(props: ViewportProps) {
 	}
 
 	/** Height revealed, in millimetres — what the big readout shows. */
-	const height = () => (props.layers > 0 ? props.thickness * props.layer / props.layers : 0)
+	const height = () =>
+		props.stops
+			? props.stops[props.layer - 1]?.top ?? 0
+			: props.layers > 0
+			? props.thickness * props.layer / props.layers
+			: 0
+	/** The same, as the part of the whole that is shown. */
+	const reveal = () => (props.thickness > 0 ? Math.min(height() / props.thickness, 1) : 1)
+	/** The board layer the slider stands on, when it steps by board layer. */
+	const atStop = () => props.stops?.[props.layer - 1]?.label
 	/** What is drawn: with no ink to show, only the body is. */
 	const show = (): RendererShow => (props.ink ? OPS[op()]?.show ?? "all" : "shell")
 	const objects = () => (show() === "all" && props.ink ? 2 : props.body ? 1 : 0)
@@ -79,8 +93,7 @@ export function Viewport(props: ViewportProps) {
 				show={show()}
 				waiting={props.waiting}
 				error={props.error}
-				layer={props.layer}
-				layers={props.layers}
+				reveal={reveal()}
 				view={view()}
 				spin={spin()}
 				tilt={tilt()}
@@ -142,7 +155,12 @@ export function Viewport(props: ViewportProps) {
 						<div class="mb-tight flex items-baseline gap-snug text-label uppercase tracking-micro">
 							<span>{props.ink ? OPS[op()]?.name : "Body"}</span>
 							<span class="normal-case tracking-normal opacity-muted">{objects()} obj</span>
-							<b class="ml-auto text-figure tracking-normal">{height().toFixed(2)} mm</b>
+							<Show when={atStop()}>
+								{(label) => <span class="ml-auto normal-case tracking-normal">{label()}</span>}
+							</Show>
+							<b class={`text-figure tracking-normal ${atStop() ? "" : "ml-auto"}`}>
+								{height().toFixed(2)} mm
+							</b>
 						</div>
 
 						{
@@ -150,7 +168,7 @@ export function Viewport(props: ViewportProps) {
 					    starts at 0 — a bare plate — not at layer 1. */
 						}
 						<Slider
-							labelText="Reveal to layer"
+							labelText={props.stops ? "Reveal to board layer" : "Reveal to layer"}
 							hideLabel
 							hideTextInput
 							min={0}
@@ -161,11 +179,26 @@ export function Viewport(props: ViewportProps) {
 							onChange={props.onLayerChange}
 						/>
 
-						{/* One number per major tick, not just the ends. */}
+						{
+							/* On a board, a name under each step: nothing, then each slab's copper
+						    layer. Otherwise one height per major tick, not just the ends. */
+						}
 						<div class="flex justify-between text-micro opacity-muted">
-							<For each={[0, 1, 2, 3, 4]}>
-								{(step) => <span>{(props.thickness * step / 4).toFixed(2)}</span>}
-							</For>
+							<Show
+								when={props.stops}
+								fallback={
+									<For each={[0, 1, 2, 3, 4]}>
+										{(step) => <span>{(props.thickness * step / 4).toFixed(2)}</span>}
+									</For>
+								}
+							>
+								{(stops) => (
+									<>
+										<span>0</span>
+										<For each={stops()}>{(stop) => <span>{stop.label}</span>}</For>
+									</>
+								)}
+							</Show>
 						</div>
 
 						{

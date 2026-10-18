@@ -14,11 +14,13 @@ import type { SetStoreFunction } from "solid-js/store"
 import Activity from "@carbon/icons/es/activity/16"
 import Chip from "@carbon/icons/es/chip/16"
 import DocumentAdd from "@carbon/icons/es/document--add/16"
+import Login from "@carbon/icons/es/login/16"
 import SettingsIcon from "@carbon/icons/es/settings/16"
 import { AppShell, createAppShell, Icon } from "@alumina/design"
 import type { NotificationKind } from "@alumina/design"
 import { APP_GLYPH, APP_TITLE } from "../lib/app"
-import { getAccount, joinNewsletter, syncToCloud } from "../lib/cloud"
+import { getAccount, joinNewsletter, signIn, signOut, syncToCloud } from "../lib/cloud"
+import type { Account, SignInResult } from "../lib/cloud"
 import { isNotABoard, openFile, openStored } from "../lib/board"
 import type { OpenBoard } from "../lib/board"
 import { ignoreStrayDrops, replayHostDrags } from "../lib/files"
@@ -29,18 +31,23 @@ import { listPrinters, listToolModules, MACHINE_DEFAULTS } from "../lib/printer"
 import type { MachineSettings, Printer, ToolModule } from "../lib/printer"
 import { createRecent } from "../lib/recent"
 import type { Recent, RecentBoard } from "../lib/recent"
-import { createWindowControls } from "../lib/window"
+import { createWindowControls, ignoreStrayContextMenus } from "../lib/window"
 import type { WindowControls } from "../lib/window"
 import { Home } from "./home/Home"
 import { JobPage } from "./JobPage"
 import { ProjectPage } from "./ProjectPage"
 import { SettingsPage } from "./Settings"
 import type { SettingsPane } from "./Settings"
+import { SignInPage } from "./SignIn"
 import { SliceView } from "./SliceView"
 
 /** Something the app has to say, said once at the top of the home screen: a
  *  dropped file that is not a board, a sync that had nowhere to go. */
-export type Notice = { kind: NotificationKind; title: string; subtitle?: string }
+export type Notice = {
+	kind: NotificationKind
+	title: string
+	subtitle?: string
+}
 
 /** Whether mica is there to ask. */
 export type Engine =
@@ -79,7 +86,19 @@ export type Studio = {
 	/** Whether the home screen's floor moves. */
 	motion: Accessor<boolean>
 	setMotion: (value: boolean) => void
-	/** Sends this machine's projects to the account, and says how it went. */
+	/** Who is signed in, if anyone — the one account every page shows. */
+	account: Resource<Account | undefined>
+	/** Signs in, and on success closes the sign-in page and says so on Home. */
+	signIn: (
+		email: string,
+		password: string,
+		stay: boolean,
+	) => Promise<SignInResult>
+	signOut: () => Promise<void>
+	/** The sign-in page, in a tab of its own. */
+	openSignIn: () => void
+	/** Sends this machine's projects to the account, and says how it went —
+	 *  or, with nobody signed in, asks them to sign in first. */
 	sync: () => Promise<void>
 	/** Puts the account on the newsletter's list, and says how it went. */
 	subscribe: () => Promise<void>
@@ -105,6 +124,9 @@ const StudioContext = createContext<Studio>()
 
 /** Settings' tab: there is only ever one. */
 const SETTINGS = "settings"
+
+/** The sign-in page's tab: one, too. */
+const SIGN_IN = "sign-in"
 
 export function useStudio(): Studio {
 	const studio = useContext(StudioContext)
@@ -150,6 +172,7 @@ export function Studio(props: StudioProps) {
 	const [notice, setNotice] = createSignal<Notice>()
 	const [motion, setMotion] = createPreference("foundry.motion", true)
 	const [settingsPane, setSettingsPane] = createSignal<SettingsPane>("printer")
+	const [account, { refetch: rereadAccount }] = createResource(() => getAccount())
 	const recent = createRecent()
 	let untitled = 0
 
@@ -193,7 +216,41 @@ export function Studio(props: StudioProps) {
 		window: windowControls,
 		motion,
 		setMotion,
+		account,
+		async signIn(email, password, stay) {
+			const result = await signIn(email, password, stay)
+			if (result.ok) {
+				await rereadAccount()
+				shell.close(SIGN_IN)
+				setNotice({
+					kind: "success",
+					title: `Signed in as ${result.account.handle}`,
+					subtitle: stay ? "This machine stays signed in." : "Until Foundry closes.",
+				})
+			}
+			return result
+		},
+		async signOut() {
+			const who = account()?.handle
+			await signOut()
+			await rereadAccount()
+			setNotice({
+				kind: "info",
+				title: who ? `${who} signed out` : "Signed out",
+				subtitle: "Boards stay on this machine. Sign in again from the foot of the start pane.",
+			})
+		},
+		openSignIn() {
+			shell.open({
+				id: SIGN_IN,
+				title: "Sign in",
+				description: "The Alumina cloud: sync, quarry and the news",
+				renderIcon: Login,
+				content: () => <SignInPage id={SIGN_IN} />,
+			})
+		},
 		async sync() {
+			if (!account()) return studio.openSignIn()
 			const result = await syncToCloud()
 			setNotice(
 				result.ok
@@ -206,7 +263,9 @@ export function Studio(props: StudioProps) {
 			)
 		},
 		async subscribe() {
-			const result = await joinNewsletter((await getAccount()).email)
+			const email = account()?.email
+			if (!email) return studio.openSignIn()
+			const result = await joinNewsletter(email)
 			setNotice(
 				result.ok
 					? { kind: "success", title: "Subscribed", subtitle: "The next letter comes to you." }
@@ -297,6 +356,7 @@ export function Studio(props: StudioProps) {
 
 	onMount(() => {
 		onCleanup(ignoreStrayDrops())
+		onCleanup(ignoreStrayContextMenus())
 		onCleanup(replayHostDrags())
 		void checkEngine()
 	})

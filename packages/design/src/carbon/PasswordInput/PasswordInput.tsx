@@ -11,8 +11,10 @@ import {
 	FIELD_GROUP,
 	FIELD_GROUP_FLUID,
 	FIELD_INNER,
+	FIELD_INNER_FLUID_TOOL,
 	FIELD_SIZE,
 	FIELD_TOOL,
+	FIELD_TOOL_FLUID,
 	fieldProps,
 	useFluid,
 } from "../../internal/field"
@@ -74,7 +76,9 @@ export function PasswordInput(props: PasswordInputProps) {
 					type={visible() ? "text" : "password"}
 					aria-invalid={local.invalid ? "true" : undefined}
 					aria-describedby={describedBy(id(), local)}
-					class={`${FIELD_INNER} min-w-0 flex-1 ${fluid ? "p-0" : FIELD_SIZE[size()]}`}
+					class={`${FIELD_INNER} min-w-0 flex-1 ${
+						fluid ? FIELD_INNER_FLUID_TOOL : FIELD_SIZE[size()]
+					}`}
 					{...rest}
 				/>
 				<button
@@ -90,7 +94,7 @@ export function PasswordInput(props: PasswordInputProps) {
 						setVisible(next)
 						local.onTogglePasswordVisibility?.(next)
 					}}
-					class={FIELD_TOOL}
+					class={fluid ? FIELD_TOOL_FLUID : FIELD_TOOL}
 				>
 					<Icon glyph={visible() ? ViewOff : View} size={16} />
 				</button>

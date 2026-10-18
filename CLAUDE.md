@@ -326,7 +326,21 @@ These live in `src/alumina/` and are added as the apps need them, not ahead of t
   "how fast does it print" out of the renderer. `transparent` lets the page backdrop show through;
   `angle`, `spin` and `fitToken` are passed in, so it never owns input. (This reverses the earlier
   rule that the renderers stay in their apps.) **`ink`** is a second solid drawn in ink under the
-  same clip — a slab's conductors. **`snapshotBoard`** is the same drawing as a
+  same clip — a slab's conductors — and in front of any board face it shares a plane with (the
+  board's faces are pushed back a few depth *units* further; never by the slope factor, which on
+  a board seen from the side pushes a face back by more than a layer). **`section`** draws the
+  reveal as what it leaves: the cut filled — board white, ink in ink — and outlined, read from
+  the solids (`section.ts`: the plane's crossings chained into loops, triangulated). Without it
+  the plane only takes away what is above and a solid cut halfway is an open shell; foundry's
+  layer slider showed exactly that. The plane runs a hair *under* the cut, taking anything at the
+  cut height with it, and the fill at the cut covers that — so nothing is left within a hair of
+  the fill for the depth buffer to separate (under a 16-bit depth buffer a channel's floor
+  showed through a fill a hair above it). The camera's near and far planes are fitted to the
+  board's diagonal either side of it for the same reason. **`inkOnly`** draws the ink alone
+  while the board still sets the frame and the reveal's range. **`ghost`** draws the whole
+  board at `opacity-40` — the system's state for not yet made — whatever the reveal, faded as a
+  whole rather than face by face (translucent faces would show its hidden edges, an X-ray):
+  foundry's stage at layer 0. **`snapshotBoard`** is the same drawing as a
   still — an image's address, rendered once and the context let go — for where a live view would
   be one WebGL context too many: foundry's gallery of recent boards and a board tab's card.
   Until it has geometry it shows the `Loading` cells (`fallback` names what is loading), or
@@ -448,6 +462,15 @@ These live in `src/alumina/` and are added as the apps need them, not ahead of t
     focus. Under a
     finger, which has no hover, the showing tab's cross is a second full-size square beneath
     it, and the others have none.
+  - **A tab has a menu**, as a browser's does: the secondary button, the Menu key or Shift+F10
+    on a tab opens one `Menu` over it — Close tab, Close other tabs, Close tabs below, Close all
+    tabs, Reopen closed tab — each greyed where it would do nothing, and focus goes back to the
+    strip after. No reload or duplicate: a page is an instance. The controller carries them
+    (`closeOthers`, `closeBelow`, `closeAll`, `reopen`, `canReopen`) and keeps the last 25
+    closed pages; a page opened again is built anew. **Ctrl+Shift+T** reopens too, since
+    closing the last page takes the strip and its menu away (a browser keeps the key for
+    itself; the desktop window has none of its own). The tab's card is held shut while its
+    menu is open.
 - **`Workspace`** is a page as two columns, **25% and 75%** (`1fr 3fr`, so the gap comes out of
   both, with a 16rem floor under the narrow one): what you set and read on the left, the thing
   you are setting on the right. It was 30/70, which gave the left column more than it used.
@@ -587,6 +610,12 @@ alluvial, word cloud and choropleth, plus `Sparkline`.
   like any other field. It is the one place a *text* field is boxed, because the box is the
   point of the layout: in a `FluidForm` the cells tile in one ruled frame (`RULED_GRID` — the
   rules are the grid's gap, so each is drawn once), and alone each is its own 2px box. No shadow.
+  Padded 8px all round (`p-2`), with 8px between label and value: at 6px above, 4px below and
+  nothing under the label the value sat on the label's foot, and at 16px at the sides the label
+  read as pushed in (2026-10-19). A tool
+  in a cell (a password's eye, a date's calendar) is a 40px square in its top corner
+  (`FIELD_TOOL_FLUID`): the height of label, gap and value, so it stands centred beside them
+  however tall a message makes the cell. In the value's row it was a flat bar, low in the cell.
   A fluid field is the ordinary component rendered under a context (`Fluid` in
   `internal/field.tsx`), as in Carbon — never a second implementation. Fill the last row of a
   fluid grid: an empty cell shows the frame's ground, which is ink.
@@ -627,6 +656,10 @@ alluvial, word cloud and choropleth, plus `Sparkline`.
   the slicer's three lanes.
 - The same rule applies to lengths in `theme.css`. If a prototype value breaks it, flag it instead
   of rounding it silently.
+- **Native even utilities first** (said again 2026-10-19): `p-2`, `p-4`, `size-10`, `gap-2` —
+  Tailwind's own scale at even numbers. `snug` (6px) and `gap` (10px) are not native multiples
+  of two and are not used in new work; older classes still carry them. A length written out by
+  hand — in `theme.css`, or a custom unit — is in rem (`1rem`, `0.25rem`), never px.
 - **No arbitrary `rem` or `px` lengths in a class.** `max-w-[46rem]` is `max-w-184`: Tailwind v4's
   spacing scale is multiplicative, so any whole even number of quarter-rems is already a utility.
   A length that is not one — 2px, 6px, 10px — is a named token (`rule`, `snug`, `gap`), never
@@ -691,6 +724,12 @@ alluvial, word cloud and choropleth, plus `Sparkline`.
   inked row (with an inset ring, white on the ink, since it usually sits flush in a pane that
   scrolls) — what the shell's strip does. It was a ruled column, a rule under every tab, and
   six rules for six sections read as busy (2026-10-18). kiln's settings dialog has the same list.
+- **A `Slider` writes its value again once its bounds are in.** A range input clamps a value to
+  the max it has at that moment, so a value and a wider range arriving together (a part loading,
+  0–1 becoming 0–4 at 4) left the thumb at 1 while the readout said 4.
+- **A `Button` is `type="button"` unless it says otherwise**, as Carbon's is: a `<button>` in a
+  `<form>` submits it by default, and the sign-in card's "Forgot your password?" did. One that
+  submits passes `type="submit"`.
 - **A drop box can ask the host for files**: `FileUploaderDropContainer`'s `onPick` replaces the
   browser's file input on a press or Enter — foundry's desktop build hands it the desktop's own
   picker. Drops are unchanged.
@@ -710,6 +749,9 @@ alluvial, word cloud and choropleth, plus `Sparkline`.
 - Air over boxes. Group with whitespace and full-width rules before adding another bordered
   container.
 - Figures are inline SVG in the same flat 2px ink stroke.
+- A `blockquote` — a quotation, or a note set apart — is a 4px ink rule down its leading edge
+  with the text 16px in from it (an element default in `theme.css`); dim the words inside it,
+  not the element, or the rule greys with them.
 - Code blocks have a line-number gutter. A line too long for the block scrolls it sideways,
   with the system scrollbar along its foot.
 - Keyboard focus is always visible. Never remove it. For most controls that is an ink outline; a
@@ -773,7 +815,8 @@ The three apps are about to be laid out again, and wired to real data. What is d
   empty project, Settings and a board's print job each open as a tab beside it and keep their
   state while another shows. `Studio` holds what every page shares — the printers and the one
   chosen, the machine's limits (the machine is the app's, not a board's: a board's Machine panel
-  and Settings edit the same store), the recent boards, and one notice slot shown on Home — and
+  and Settings edit the same store), the recent boards, **who is signed in** (`account`, with
+  `signIn`, `signOut` and `openSignIn`), and one notice slot shown on Home — and
   the ways to open a page (`useStudio()`), and **whether mica is answering** (`engine`, checked on
   start and whenever a call fails to reach it) with mica's option table. The routes are only `/`
   and `/slice/<board>` — mica's id for a board — which opens the app with that board's tab
@@ -811,13 +854,22 @@ The three apps are about to be laid out again, and wired to real data. What is d
   gallery is a `FileUploaderDropContainer`. An IPC-2581 file dropped opens in a tab of its own,
   several at once; a file that is not one is refused with a notice, by ending or by content. A
   file let go anywhere else in the app is ignored (`ignoreStrayDrops`), not opened by the
-  webview in place of the app. The floor stops when Settings says so (a kept preference,
+  webview in place of the app. **Right-click is the same**: where nothing has a menu of its own
+  (a strip tab, a recent board) it does nothing (`ignoreStrayContextMenus` in `lib/window.ts`),
+  instead of the host's menu — WebKit's Back, Reload and Inspect Element in the desktop window,
+  which reloaded the app out from under every tab. A text field (cut, copy, paste) and
+  selected text (copy) keep the host's menu. The floor stops when Settings says so (a kept preference,
   `lib/preferences.ts`).
 - **mica opens a board** (`openFile` in `lib/board.ts`): the file's text is uploaded, and mica
   decides whether it is a board — a refusal (`unparseable`, …) is a notice in mica's words — and
   reads its name, layers, conductors, size, drills and vias. What mica does not report — the
   header's revision, author, company, exporting tool and date, units and role — is read out of
-  the same text here (`readHeader`): real, never typed in, never a stand-in.
+  the same text here (`readHeader`): real, never typed in, never a stand-in. **So is the board's
+  thickness**: the stackup's `overallThickness` (else its group's, else its layers added up),
+  in the file's units. mica reads no stackup — its `thickness` is an option, 1.6 mm unless told
+  — so the board is sliced at its own thickness unless it is set by hand, and the Slice panel's
+  "Defaults" goes back to it. Not every board stacks to 1.6 mm; nothing in foundry assumes it,
+  and every height on the stage is measured off the solids.
 - **The document is kept** (`lib/documents.ts`, IndexedDB, keyed by mica's id for it — the
   SHA-256 of the bytes), because mica keeps everything in memory: restarted, or with a full
   store, it forgets boards. Reopening a recent board, or running one mica has forgotten
@@ -838,7 +890,8 @@ The three apps are about to be laid out again, and wired to real data. What is d
   keystroke; options set since the run on show say so). "Validate" switches on mica's
   `validate` option and slices. The Slice panel is the file's header over **mica's own option
   table** (`GET /v1/options`, read live; `step` and `verbose` left out, a new option shown under
-  its own name until `FIELD` in `SettingsPanel` names it), with "mica's defaults" to go back.
+  its own name until `FIELD` in `SettingsPanel` names it), with "Defaults" to go back to the
+  board's own thickness and mica's defaults.
   Right: Run (mica's verdict line, the outcome, the stages that ran and how long), **Ink** (mica's
   volume per slab, a proportional `MeterChart` over a `StructuredList` — where the production
   time estimate stood: time is the G-code's, and the G-code is shale's), **Findings** (mica's
@@ -859,11 +912,42 @@ The three apps are about to be laid out again, and wired to real data. What is d
   tab's pop. The mesh still loads at once; only the drawing waits.
 - **The stage shows one of what mica made** (`lib/parts.ts`): the assembly (or the one-piece
   plate), each slab as it is printed with its ink solid, and the fixtures — every file is in the
-  board's own coordinates, so each stands alone, and a slab's ink is drawn in ink in it
-  (`BoardView`'s `ink`). The parts list (`PartsTile`, radio groups by kind) replaced the
+  board's own coordinates, so each stands alone, and a slab's ink is drawn in pure ink in it
+  (`BoardView`'s `ink`). **The assembly is built from the slabs**, not drawn from mica's
+  `assembly.stl`, which is the same stack as one solid with no ink: each slab is placed as mica's
+  `pipeline.rs` places it — stacked on the ones before it, the flipped one mirrored back about
+  the board's centre line and turned over (a half turn about y, so no winding changes) — and
+  carries its ink there. The parts list (`PartsTile`, radio groups by kind) replaced the
   prototype's layer tree. The viewport's switch is All / Shell / Ink over the real solids (Drill
-  went: it had no geometry), and its slider runs over the part's print layers — its height over
-  the run's `layer_height`. A refused run made no parts, and the stage says so.
+  went: it had no geometry; Ink is `inkOnly`, so the board does not move in the frame). **Its
+  slider counts what the part is made of.** On the assembly that is **the board's own layers**,
+  as the file has them: 0, then each slab laid on with its ink, named by its copper layer (0,
+  B.Cu, F.Cu for a two-layer board) — the assembly is never one print, so its stacked print
+  layers (eight for that board) counted nothing real. On a slab, a fixture or the plate it is
+  the print layers — the height over the run's `layer_height`, a part top not whole counted as
+  a layer. Either way the reveal is **drawn as a section**: what is there so far, the last of it
+  filled where it was cut, ink and all. At layer 0 nothing is printed, and the stage shows
+  the whole part as a ghost (`BoardView`'s `ghost`). It was the plane alone, which left an open shell
+  with nothing in its channels (2026-10-18). A one-piece run writes no ink file, so the plate
+  has none. A refused run made no parts, and the stage says so.
+- **Signing in is a prototype** (`components/SignIn.tsx`, over `lib/cloud.ts`): a tab holding
+  **one card centred on the floor** — a line on what the account is for; email and password as
+  **boxed fluid fields** (the underlined field read as too slight for the one thing the page
+  asks); "stay signed in"; Sign in and Forgot password? side by side; "No account?" centred
+  over Create one and Continue without one, side by side; then the adapter's note on how the
+  prototype answers, as a `blockquote`. Every button but Sign in is `tertiary` — outlined —
+  since a ghost button there did not read as a button. The pairs stack under `sm`.
+  **It is the one page that is not a `Workspace`**: built as one (the form in the 25% tile, a
+  tile of reasons in the 75%), it read as horrendous in review — a form is a few fields, so the
+  narrow tile stood the window's height round nothing. The sections are the tile's own
+  children, ruled apart, and the `Form` is inside the first — wrapped round all of them, its
+  24px gap opened a band of white above each section. It opens wherever the app needs an account
+  and has none: the start pane's foot (a "Sign in" command while signed out), Settings' Account
+  pane, Sync to cloud and the newsletter. "Sign out" works, and whether the machine is signed in
+  is kept between launches. The fixture: any address and a password of 8 or more characters
+  signs in as `avthenticstemcel`; an address at `pixelexia.com` is refused; reset and new
+  accounts say there is no cloud yet. A real backend replaces `lib/cloud.ts` and drops
+  `SIGN_IN_NOTE`.
 - Tool modules are reported by the machine on connect, not configured in the slicer. Show them
   read-only: the bays are a `TileGroup` of `RadioTile`s, and a bay's settings are `readOnly` inline
   fields. They are stand-ins until shale, and the panel says so.
@@ -873,8 +957,8 @@ The three apps are about to be laid out again, and wired to real data. What is d
   (`mica serve`, docs/API.md in the mica repo), typed as it answers, every failure a `MicaError`
   with mica's code — `lib/board.ts` a board as the app holds it, `lib/parts.ts` a run's parts and
   meshes, `lib/documents.ts` kept documents, `lib/printer.ts` the printer, its tool modules and
-  limits (**fixtures until shale**, `fixtures/printer.ts`), `lib/cloud.ts` the account,
-  newsletter and sync (fixtures; sync says there is nowhere to sync to), `lib/recent.ts` the
+  limits (**fixtures until shale**, `fixtures/printer.ts`), `lib/cloud.ts` the account and
+  signing in, the newsletter and sync (fixtures; sync says there is nowhere to sync to), `lib/recent.ts` the
   recent boards, `lib/window.ts` the desktop window (and the drags it takes),
   `lib/files.ts` the file picker, the stray-drop guard and the replay of the window's drags, `lib/picture.ts` a board's still, `lib/preferences.ts` what the app
   keeps between launches. `lib/app.ts` holds the name, the title, the version and the glyph.

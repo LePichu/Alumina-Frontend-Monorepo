@@ -1,27 +1,49 @@
-import { createResource, Show } from "solid-js"
+import { Show } from "solid-js"
 import CaretUp from "@carbon/icons/es/caret--up/16"
 import CloudUpload from "@carbon/icons/es/cloud--upload/16"
+import Login from "@carbon/icons/es/login/16"
 import Logout from "@carbon/icons/es/logout/16"
 import Printer from "@carbon/icons/es/printer/16"
 import Settings from "@carbon/icons/es/settings/16"
-import { Avatar, Icon, OverflowMenu, OverflowMenuItem, TileSection } from "@alumina/design"
+import {
+	Avatar,
+	ContainedList,
+	ContainedListItem,
+	Icon,
+	OverflowMenu,
+	OverflowMenuItem,
+	TileSection,
+} from "@alumina/design"
 import type { CarbonGlyph } from "@alumina/design"
 import avatarUrl from "../../fixtures/avatar.jpg?url"
-import { getAccount } from "../../lib/cloud"
 import { useStudio } from "../Studio"
 
 /** Who is signed in, at the foot of the start pane, and what goes with the
  *  account — as kiln's rail ends on its account and quarry's nav on its menu.
+ *  With nobody signed in, it is one more command, the start list's last: Sign
+ *  in, which opens the sign-in page.
  *
  *  The whole row is the menu's trigger, and the menu opens upwards: it is at the
  *  bottom of the window. */
 export function AccountMenu() {
 	const studio = useStudio()
-	const [account] = createResource(() => getAccount())
+	// Only once the account has been read: a sign-in row that flashes up before
+	// the account arrives would be a lie for a moment.
+	const signedOut = () => studio.account.state === "ready" && !studio.account()
 
 	return (
 		<TileSection flush>
-			<Show when={account()}>
+			<Show when={signedOut()}>
+				<ContainedList commands size="lg">
+					<ContainedListItem
+						renderIcon={Login}
+						onClick={() => studio.openSignIn()}
+					>
+						Sign in
+					</ContainedListItem>
+				</ContainedList>
+			</Show>
+			<Show when={studio.account()}>
 				{(user) => (
 					<OverflowMenu
 						label={`Account · ${user().handle}`}
@@ -61,7 +83,10 @@ export function AccountMenu() {
 							itemText={<MenuRow glyph={Settings} label="Settings" />}
 							onClick={() => studio.openSettings()}
 						/>
-						<OverflowMenuItem itemText={<MenuRow glyph={Logout} label="Sign out" />} />
+						<OverflowMenuItem
+							itemText={<MenuRow glyph={Logout} label="Sign out" />}
+							onClick={() => void studio.signOut()}
+						/>
 					</OverflowMenu>
 				)}
 			</Show>

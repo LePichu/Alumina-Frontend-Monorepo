@@ -101,6 +101,7 @@ export function Button(props: ButtonProps) {
 		"content",
 		"renderIcon",
 		"href",
+		"type",
 		"class",
 		"children",
 	])
@@ -112,6 +113,10 @@ export function Button(props: ButtonProps) {
 		<Dynamic
 			component={local.href ? "a" : "button"}
 			href={local.href}
+			// Carbon's default. A <button> in a <form> otherwise submits it, so a
+			// "Forgot your password?" beside the sign-in fields sent the form on
+			// the way to its own onClick. A button that submits says so.
+			type={local.href ? undefined : local.type ?? "button"}
 			// The press lands the face exactly where its shadow was.
 			class={`inline-flex cursor-pointer select-none items-center gap-snug border-2 no-underline
 				transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none

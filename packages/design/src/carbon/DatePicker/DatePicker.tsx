@@ -23,8 +23,10 @@ import {
 	FIELD_GROUP,
 	FIELD_GROUP_FLUID,
 	FIELD_INNER,
+	FIELD_INNER_FLUID_TOOL,
 	FIELD_SIZE,
 	FIELD_TOOL,
+	FIELD_TOOL_FLUID,
 	fieldProps,
 	Fluid,
 	messageIdOf,
@@ -435,7 +437,11 @@ export function DatePickerInput(props: DatePickerInputProps) {
 							}
 						}}
 						class={`${FIELD_INNER} min-w-0 flex-1 tabular-nums ${
-							fluid ? "p-0" : FIELD_SIZE[ctx.size()]
+							!fluid
+								? FIELD_SIZE[ctx.size()]
+								: ctx.type() !== "simple" && !ctx.readOnly()
+								? FIELD_INNER_FLUID_TOOL
+								: "p-0"
 						}`}
 					/>
 					<Show when={ctx.type() !== "simple" && !ctx.readOnly()}>
@@ -443,7 +449,9 @@ export function DatePickerInput(props: DatePickerInputProps) {
 							type="button"
 							aria-label="Open calendar"
 							disabled={disabled()}
-							class={`${FIELD_TOOL} data-[open]:bg-ink data-[open]:text-white`}
+							class={`${
+								fluid ? FIELD_TOOL_FLUID : FIELD_TOOL
+							} data-[open]:bg-ink data-[open]:text-white`}
 						>
 							<Icon glyph={CalendarIcon} size={16} />
 						</CorvuPopover.Trigger>
